@@ -1,6 +1,8 @@
 import re
 import pandas as pd
 import numpy as np
+from thefuzz import process
+from unidecode import unidecode
 
 def intersect_cells(x, y):
 
@@ -39,13 +41,12 @@ def fetch_vivc(s, select_prime = False):
         "rs": "rose",
     }
 
-    if re.search(r" (b|g|gr|n|r|rg|rs)$", s):
-        species_nam = re.sub(' (b|g|gr|n|r|rg|rs)$', '', s)
-        skin_col = color_mapping[re.findall(r" (b|g|gr|n|r|rg|rs)$", s)[-1]]
+    if re.search(r" \((b|g|gr|n|r|rg|rs)\)$", s):
+        species_nam = re.sub(r' \((b|g|gr|n|r|rg|rs)\)$', '', s)
+        skin_col = color_mapping[re.findall(r" \((b|g|gr|n|r|rg|rs)\)$", s)[-1]]
     else:
         species_nam = s
         skin_col = ''
-
     # Generate search url and download possible matches
     try:
         url = vivc_url.format(species = species_nam.replace(' ', '+'), skin_color = skin_col)
@@ -72,6 +73,33 @@ def fetch_vivc(s, select_prime = False):
         prime = 'Function error!'
 
     return(prime)
+
+def map_primes(nams_list):
+
+    nams_lower = [i.lower() for i in nams_list]
+
+    chars = list(set(''.join(nams_lower)))
+    chars_map = {i: unidecode(i, errors = 'strict') for i in chars if (i != unidecode(i))}
+    chars_map.update({'ä':'ae', 'ü':'ue', 'ö':'oe'})
+    dict_translate = str.maketrans(chars_map)
+
+    nams_decode = [i.translate(dict_translate) for i in nams_lower]
+    nams_primes = [fetch_vivc(i) for i in nams_decode]
+
+    return( pd.DataFrame(
+        zip(nams_list, nams_decode, nams_primes),
+        columns=["Original Name", "Decoded Name", "Primes VIVC"],
+        )
+    )
+
+def fuzzy_match(x, choices):
+    if not choices == choices:
+        return(('', 0))
+    elif len(choices) == 1:
+        return((list(choices)[0], 100))
+    else:
+        x_strip = re.sub(' (b|g|gr|n|r|rg|rs)$', '', x) #remove color code
+        return(process.extractOne(x_strip, choices))
 
 pdo_nam_corrections = {
     'meslier saint-francois b': 'meslier saint francois b',
