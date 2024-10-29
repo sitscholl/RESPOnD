@@ -84,6 +84,7 @@ if not eurostat_mapping_out.is_file():
 else:
     eurostat_primes = pd.read_csv(eurostat_mapping_out)
 
+eurostat_primes["Primes VIVC"] = eurostat_primes["Primes VIVC"].replace({"[Function error!]": np.nan})
 eurostat_primes['Primes VIVC'] = eurostat_primes['Primes VIVC'].map(lambda x: x.split('; ') if x == x else x)
 
 ####3. Select the prime name that is equal/highly similar to the original name
@@ -93,8 +94,20 @@ eurostat_primes[["Prime Name", "Score"]] = pd.DataFrame(
     ).tolist(),
     index=eurostat_primes.index,
 )
+eurostat_primes['Prime Name'] = eurostat_primes['Prime Name'].replace('', np.nan)
 
-###4. Manual corrections
+###4. Remove mappings with low score
+eurostat_primes.loc[eurostat_primes['Score'] < 90, 'Prime Name'] = np.nan
+
+###5. Check mappings for vars that intersect with parker manually
+tbl_parker = pd.read_csv('prepared_data/parker_2013.csv').drop('Unnamed: 0', axis = 1)
+if tbl_parker['Prime Name'].dropna().duplicated().any():
+    raise ValueError('Duplicated Prime Names in tbl_parker!')
+
+man_check = tbl_parker[['Variety', 'Prime Name']].rename(columns = {'Variety': 'Original Parker'}).merge(eurostat_primes.dropna(subset = 'Prime Name'), on = 'Prime Name', how = 'left')
+man_check.sort_values(['Original Parker', 'Score'], inplace = True)
+man_check.drop(['Decoded Name'], axis = 1, inplace = True)
+
 eurostat_corrs = {
     "blaufrankisch (n)": "BLAUFRAENKISCH",
     "cserszegi fuszeres (b)": "CSERSZEGI FUESZERES",
@@ -104,8 +117,8 @@ eurostat_corrs = {
 for a, b in eurostat_corrs.items():
     eurostat_primes.loc[eurostat_primes['Decoded Name'] == a, ['Prime Name', 'Score']] = (b, 100)
 
-## Filter out unreliable mappings
-eurostat_primes.loc[eurostat_primes['Score'] < 90, 'Prime Name'] = np.nan
+matches_count = len(set(tbl_parker['Prime Name']).intersection(eurostat_primes['Prime Name'].unique()))
+print(f"For {matches_count} varieties a match between the parker dataset and the anderson dataset was found")
 
 nans = eurostat_primes['Prime Name'].isna().sum()
 print(f"For {nans} varieties Prime Name could not be determined.")
