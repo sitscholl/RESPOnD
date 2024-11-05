@@ -49,7 +49,7 @@ pdo_nam_corrections = {
 pdo_melt['Original Name'] = [pdo_nam_corrections[i] if i in pdo_nam_corrections.keys() else i for i in pdo_melt['Original Name']]
 
 ##1. For each variety in the PDO Dataset, find all possible Prime names from the VIVC database
-pdo_map_file = Path('mappings/pdo_name_map.csv')
+pdo_map_file = Path('mappings/pdo_name_map_old.csv')
 if not pdo_map_file.is_file():
     pdo_name_map = map_primes(pdo_melt['Original Name'].unique())
     pdo_name_map.to_csv(pdo_map_file, index = False)

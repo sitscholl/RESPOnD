@@ -18,9 +18,9 @@ def fetch_vivc(s):
         "rs": "rose",
     }
 
-    if re.search(r" \((b|g|gr|n|r|rg|rs)\)$", s):
-        species_nam = re.sub(r' \((b|g|gr|n|r|rg|rs)\)$', '', s)
-        skin_col = color_mapping[re.findall(r" \((b|g|gr|n|r|rg|rs)\)$", s)[-1]]
+    if re.search(r" (b|g|gr|n|r|rg|rs)$", s):
+        species_nam = re.sub(r' (b|g|gr|n|r|rg|rs)$', '', s)
+        skin_col = color_mapping[re.findall(r" (b|g|gr|n|r|rg|rs)$", s)[-1]]
     else:
         species_nam = s
         skin_col = ''

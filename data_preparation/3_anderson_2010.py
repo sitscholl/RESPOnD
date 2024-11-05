@@ -29,10 +29,10 @@ tbl_australia['Original Name'] = [australia_nam_corrections[i] if i in australia
 
 nams_australia = tbl_australia['Original Name'].unique()
 
-australia_map_file = Path("mappings/australia_name_map.csv")
+australia_map_file = Path("mappings/australia_name_map_old.csv")
 if not australia_map_file.is_file():
     australia_name_map = map_primes(nams_australia)
-    australia_name_map.to_csv('mappings/australia_name_map.csv')
+    australia_name_map.to_csv(australia_map_file)
 else:
     australia_name_map = pd.read_csv(australia_map_file).rename(columns = {'Variety Prime': 'Primes VIVC'})
 
