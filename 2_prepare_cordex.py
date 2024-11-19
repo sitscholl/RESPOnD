@@ -115,7 +115,7 @@ mask_diff = tas_diff.groupby('time.year').apply(lambda x: x.notnull().any('time'
 Fcrit_date = tas_diff.groupby('time.year').apply(lambda c: c.idxmin(dim="time"))
 
 ##Expand array to add 45 days after Fcrit is reached
-#test4 = test3.expand_dims(nr = 1).interp(nr = np.arange(45)+1)
+# test4 = test3.expand_dims(nr = 1).interp(nr = np.arange(45)+1)
 Fcrit_range = xr.concat(
     [
         (Fcrit_date + np.timedelta64(i, "D")).assign_coords({"nr": i})
@@ -133,3 +133,24 @@ Fcrit_range.isel(year = 0, nr = -1).dt.dayofyear.plot()
 clim_window = ds.sel(time = Fcrit_range, method = 'nearest').where(mask_diff) #method = 'nearest' needed, otherwise error due to NAN values
 plt.clf()
 clim_window.tasAdjust.isel(year = 0, nr = -1).plot()
+
+
+# test = xr.open_dataset(
+#     #r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_orog_30arcsec_global.nc"
+#     #r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_pr_1800arcsec_global_daily_198711.nc"
+#     #r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_tas_90arcsec_global_daily_197901.nc"
+#     #r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_rsds_90arcsec_global_daily_197901.nc"
+#     r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_pr_30arcsec_global_daily_197901.nc"
+#     + "#mode=bytes",
+#     chunks = 'auto'
+# )
+# test.chunks
+# test2 = test.sel(lat = slice(43, 47), lon = slice(5, 14))
+# test2 = test2.rio.write_crs(4326)
+# test2 = test2.rio.reproject(3035)
+# test2.chunks
+# test2.rio.resolution()
+
+# #import matplotlib.pyplot as plt
+# plt.clf()
+# test2.pr.isel(time = 3).plot()
