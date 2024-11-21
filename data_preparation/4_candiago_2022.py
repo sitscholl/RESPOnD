@@ -1,6 +1,4 @@
 import pandas as pd
-import re
-import pycountry
 from pathlib import Path
 from functions import map_primes, fuzzy_match
 import numpy as np

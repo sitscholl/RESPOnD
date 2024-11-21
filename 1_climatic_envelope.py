@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 # from rasterio.enums import Resampling
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from itertools import product
 import logging
 
@@ -40,8 +40,8 @@ parker_sub = (
 #-19.423828,27.059126,34.541016,57.468589
 aoi_lat = slice(27, 57) #slice(46, 47) #slice(44, 48)
 aoi_lon = slice(-19.4, 34.5) #slice(10, 12) #slice(4, 16)
-resolution = "90arcsec"
-years = np.arange(2000, 2003)
+resolution = "300arcsec"
+years = np.arange(2000, 2005)
 months = np.arange(3, 12)
 variables = ['tas', 'tasmin', 'tasmax', 'pr']
 veraison_max = 275
@@ -149,3 +149,5 @@ for v_name, Fcrit in list(zip(parker_sub['Prime Name'], parker_sub['F*'])):
     clim_idx.append(_clim_idx)
 
 clim_idx = xr.concat(clim_idx, dim = 'Prime')
+
+#clim_idx.to_netcdf('envelopes/clim_idx_2000_2004.nc')
