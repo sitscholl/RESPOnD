@@ -3,7 +3,7 @@ import geopandas as gpd
 import re
 import glob
 import numpy as np
-from functions import map_primes, fuzzy_match
+from functions.name_mapping import map_primes, fuzzy_match
 from pathlib import Path
 
 # Prepare NUTS shp

@@ -1,6 +1,6 @@
 import pandas as pd
 from pathlib import Path
-from functions import map_primes, fuzzy_match
+from functions.name_mapping import map_primes, fuzzy_match
 import numpy as np
 
 ##############
