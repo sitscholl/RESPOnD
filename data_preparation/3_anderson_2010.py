@@ -2,7 +2,7 @@ import pandas as pd
 import re
 import pycountry
 from pathlib import Path
-from functions import fuzzy_match, map_primes
+from functions.name_mapping import fuzzy_match, map_primes
 import numpy as np
 
 tbl_australia = pd.read_csv('../data/australian_wine_atlas/variety_area_2010.csv')

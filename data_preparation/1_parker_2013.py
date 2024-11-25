@@ -2,7 +2,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from unidecode import unidecode
-from functions import fetch_vivc, fuzzy_match, map_primes
+from functions.name_mapping import *
 
 tbl_parker = pd.read_excel('../data/parker_2013.xlsx', sheet_name = 'Veraison')
 
