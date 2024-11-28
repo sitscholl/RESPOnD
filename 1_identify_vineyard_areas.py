@@ -2,36 +2,62 @@ import pandas as pd
 import numpy as np
 import geopandas as gpd
 import xarray as xr
-import xagg as xa
-import time
-import pooch
+from shapely import Polygon
+from rasterio.features import rasterize
+import rioxarray
 
-vineyards_shp = gpd.read_file('../data/vineyards_europe_lau.shp')#.cx[4309705.6318:4611308.8673,2528263.1823:2669324.8642]
-vineyards_shp = vineyards_shp.to_crs(4326)
+from functions import config
 
-pdo_path = pooch.retrieve(
-    "https://springernature.figshare.com/ndownloader/files/35955185",
-    fname="EU_PDO.gpkg",
-    known_hash="8df0dc759f9c1bc17fff12d653b224282382d6a10f4a15c2cf937d5ab13f0356",
-)
-pdo_shp = gpd.read_file(pdo_path).to_crs(vineyards_shp.crs)
+##Load data
+dem_chelsa = r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_orog_30arcsec_global.nc#mode=bytes"
+minx, miny, maxx, maxy = config.aois['europe']
+dem = xr.open_dataset(dem_chelsa).sel(lat = slice(miny, maxy), lon = slice(minx, maxx))
+dem = dem.rio.write_crs(4326)
 
-##Intersect PDOs and vineyards
-pdo_vineyards = (
-    gpd.overlay(pdo_shp, vineyards_shp, how="intersection", keep_geom_type=True)
-)
-pdo_vineyards = pdo_vineyards.loc[pdo_vineyards.to_crs(3035).geometry.area >= 10000]
-pdo_vineyards.sindex
+##Create fishnet grid
+vals, counts = np.unique(np.diff(dem.lat.values), return_counts = True)
+fishnet_res = vals[np.argmax(counts)]
+geoms = []
+for y in dem.lat:
+    for x in dem.lon:
+        x_c, y_c = x-(fishnet_res/2), y-(fishnet_res/2)
+        pl = Polygon([(x_c,y_c), (x_c+fishnet_res,y_c), (x_c+fishnet_res, y_c+fishnet_res), (x_c, y_c+fishnet_res)])
+        geoms.append(pl)
 
-clim_arr = xr.open_dataset('envelopes/clim_idx_2000_2004.nc').isel(year = 0)
+fishnet = gpd.GeoDataFrame(data = {'grid_id': np.arange(len(geoms))}, geometry = geoms, crs = 4326) 
 
-##Create weightmap
-start = time.time()
-weightmap = xa.pixel_overlaps(clim_arr, pdo_vineyards)
-end = time.time()
+##Intersect with vineyard landcover
+vineyards_shp = gpd.read_file('../data/vineyards_europe_lau.shp').to_crs(4326).cx[minx:maxx,miny:maxy]
 
-print(f"Time required to calcualte weightmap: {(end - start)/60:.1f} minutes")
+fishnet_inters = gpd.overlay(fishnet, vineyards_shp, how = 'intersection', keep_geom_type=True)
+fishnet_inters['area'] = fishnet_inters.to_crs(3035).geometry.area
+fishnet_inters = fishnet_inters.sort_values('area', ascending=False).drop_duplicates(['grid_id'], keep = 'first')
 
-##Save weightmap and vineyard shp
-weightmap.to_file('prepared_data/wm')
-# weightmap = xa.read_wm('prepared_data/wm')
+##For each grid, select LAUid with highest share of vineyard area
+fishnet_sub = fishnet.merge(fishnet_inters.drop('geometry', axis = 1), on = 'grid_id', how = 'inner')
+fishnet_sub['area_share'] = fishnet_sub['area'] / fishnet_sub.to_crs(3035).geometry.area
+fishnet_sub.drop(['area', 'grid_id'], axis = 1, inplace = True)
+fishnet_sub['id'] = np.arange(len(fishnet_sub))+1
+
+fishnet_sub[['id', 'LAUid']].to_csv('prepared_data/vineyards/_fishnet_lau_map.csv', index = False)
+##Rasterize
+for thresh in [0, 0.03, 0.05]:
+    fishnet_thresh = fishnet_sub.loc[fishnet_sub['area_share'] >= thresh]
+
+    # create tuples of geometry, value pairs, where value is the attribute value you want to burn
+    geom_value = [(geom,value) for geom, value in zip(fishnet_thresh.geometry, fishnet_thresh['id'])]
+
+    # Rasterize vector using the shape and transform of the raster
+    rasterized = rasterize(
+        geom_value,
+        out_shape=dem.orog.shape,
+        transform=dem.rio.transform(),
+        all_touched=False,
+        fill=0,
+        dtype=np.int16,
+    )
+    rasterized_arr = dem.orog.copy()
+    rasterized_arr[:] = rasterized
+
+    rasterized_arr.rio.to_raster(f'prepared_data/vineyards/rasterized_{thresh}.tif')
+    fishnet_thresh.to_file(f'prepared_data/vineyards/fishnet_{thresh}.shp')
