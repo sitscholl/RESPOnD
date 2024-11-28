@@ -4,3 +4,4 @@ test*
 *.docx
 thrash/*
 envelopes/*
+intermediate_results/*
