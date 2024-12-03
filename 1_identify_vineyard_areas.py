@@ -3,6 +3,7 @@ import numpy as np
 import geopandas as gpd
 import xarray as xr
 from shapely import Polygon
+import rasterio
 from rasterio.features import rasterize
 import rioxarray
 
@@ -10,9 +11,11 @@ from functions import config
 
 ##Load data
 dem_chelsa = r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_orog_30arcsec_global.nc#mode=bytes"
-minx, miny, maxx, maxy = config.aois['europe']
+minx, miny, maxx, maxy = config.aois["europe"]
 dem = xr.open_dataset(dem_chelsa).sel(lat = slice(miny, maxy), lon = slice(minx, maxx))
 dem = dem.rio.write_crs(4326)
+
+print('Dem loaded')
 
 ##Create fishnet grid
 vals, counts = np.unique(np.diff(dem.lat.values), return_counts = True)
@@ -26,8 +29,10 @@ for y in dem.lat:
 
 fishnet = gpd.GeoDataFrame(data = {'grid_id': np.arange(len(geoms))}, geometry = geoms, crs = 4326) 
 
+print('Fishnet created')
+
 ##Intersect with vineyard landcover
-vineyards_shp = gpd.read_file('../data/vineyards_europe_lau.shp').to_crs(4326).cx[minx:maxx,miny:maxy]
+vineyards_shp = gpd.read_file('../data/vineyards_europe_lau.shp').to_crs(4326)#.cx[minx:maxx,miny:maxy]
 
 fishnet_inters = gpd.overlay(fishnet, vineyards_shp, how = 'intersection', keep_geom_type=True)
 fishnet_inters['area'] = fishnet_inters.to_crs(3035).geometry.area
@@ -39,13 +44,14 @@ fishnet_sub['area_share'] = fishnet_sub['area'] / fishnet_sub.to_crs(3035).geome
 fishnet_sub.drop(['area', 'grid_id'], axis = 1, inplace = True)
 fishnet_sub['id'] = np.arange(len(fishnet_sub))+1
 
-fishnet_sub[['id', 'LAUid']].to_csv('prepared_data/vineyards/_fishnet_lau_map.csv', index = False)
-##Rasterize
-for thresh in [0, 0.03, 0.05]:
-    fishnet_thresh = fishnet_sub.loc[fishnet_sub['area_share'] >= thresh]
+fishnet_sub.to_file(f'prepared_data/vineyards/vineyards_fishnet.shp')
 
+print('Fishnet intersected')
+# fishnet_sub = gpd.read_file(f'prepared_data/vineyards/vineyards_fishnet.shp')
+##Rasterize
+for col in ['id', 'area_share']:
     # create tuples of geometry, value pairs, where value is the attribute value you want to burn
-    geom_value = [(geom,value) for geom, value in zip(fishnet_thresh.geometry, fishnet_thresh['id'])]
+    geom_value = [(geom,value) for geom, value in zip(fishnet_sub.geometry, fishnet_sub[col])]
 
     # Rasterize vector using the shape and transform of the raster
     rasterized = rasterize(
@@ -54,10 +60,24 @@ for thresh in [0, 0.03, 0.05]:
         transform=dem.rio.transform(),
         all_touched=False,
         fill=0,
-        dtype=np.int16,
+        dtype=np.float64,
     )
-    rasterized_arr = dem.orog.copy()
-    rasterized_arr[:] = rasterized
 
-    rasterized_arr.rio.to_raster(f'prepared_data/vineyards/rasterized_{thresh}.tif')
-    fishnet_thresh.to_file(f'prepared_data/vineyards/fishnet_{thresh}.shp')
+    profile = {
+        'driver': 'GTiff',
+        'dtype': np.float64,
+        'nodata': 0,
+        'width': dem.lon.size,
+        'height': dem.lat.size,
+        'count': 1,
+        'crs': 4326,
+        'transform': dem.rio.transform(),
+        'tiled': True,
+        'compress': 'lzw'
+    }
+
+    # Write output raster
+    with rasterio.open(f'prepared_data/vineyards/rasterized_{col}.tif','w',**profile) as dst:
+        dst.write(rasterized,1)
+
+    print(f"Fishnet with parameter {col} rasterized.")
