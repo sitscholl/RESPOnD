@@ -56,7 +56,7 @@ fishnet_inters = fishnet_inters.sort_values('area', ascending=False).drop_duplic
 fishnet_sub = fishnet.merge(fishnet_inters.drop('geometry', axis = 1), on = 'grid_id', how = 'inner')
 fishnet_sub['area_share'] = fishnet_sub['area'] / fishnet_sub.to_crs(3035).geometry.area
 fishnet_sub.drop(['area', 'grid_id'], axis = 1, inplace = True)
-fishnet_sub['id'] = np.arange(len(fishnet_sub))+1
+fishnet_sub['id'] = fishnet_sub.groupby('GISCO_ID').ngroup()
 
 ## Add PDOs (drops also polygons outside PDO areas)
 fishnet_sub = fishnet_sub.merge(gisco_pdo_link, on = 'GISCO_ID', how = 'inner')
