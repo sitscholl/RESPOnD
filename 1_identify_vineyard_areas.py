@@ -10,9 +10,8 @@ import rioxarray
 from functions import config
 
 ##Load data
-dem_chelsa = r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_orog_30arcsec_global.nc#mode=bytes"
-minx, miny, maxx, maxy = config.aois["europe"]
-dem = xr.open_dataset(dem_chelsa).sel(lat = slice(miny, maxy), lon = slice(minx, maxx))
+minx, miny, maxx, maxy = config.aois["south_tyrol"]
+dem = xr.open_dataset(config.dem_chelsa).sel(lat = slice(miny, maxy), lon = slice(minx, maxx))
 dem = dem.rio.write_crs(4326)
 
 print('Dem loaded')
@@ -31,22 +30,40 @@ fishnet = gpd.GeoDataFrame(data = {'grid_id': np.arange(len(geoms))}, geometry =
 
 print('Fishnet created')
 
-##Intersect with vineyard landcover
-vineyards_shp = gpd.read_file('../data/vineyards_europe_lau.shp').to_crs(4326)#.cx[minx:maxx,miny:maxy]
+##Prepare vineyards
+vineyards_shp = gpd.read_file('data/vineyards/vineyards_europe_explode.shp').to_crs(4326).cx[minx:maxx,miny:maxy]
+gisco_lau = gpd.read_file(config.gisco_lau)[['GISCO_ID', 'geometry']].cx[minx:maxx,miny:maxy]
+vineyards_lau = gpd.overlay(
+    vineyards_shp, gisco_lau, how="intersection", keep_geom_type=True
+)[["GISCO_ID", "geometry"]].dissolve(by="GISCO_ID").reset_index()
 
-fishnet_inters = gpd.overlay(fishnet, vineyards_shp, how = 'intersection', keep_geom_type=True)
+##Prepare PDOs
+pdo_shp = gpd.read_file(config.downloader.fetch('EU_PDO.gpkg'))
+gisco_points = gisco_lau.to_crs(pdo_shp.crs)
+gisco_points['geometry'] = gisco_points.geometry.representative_point()
+pdo_lau = gpd.sjoin(pdo_shp, gisco_points, how = 'inner', predicate = 'intersects')
+gisco_pdo_link = pdo_lau.groupby('GISCO_ID', as_index = False).apply(lambda x: ';'.join(x['PDOid']), include_groups=False)
+gisco_pdo_link.rename(columns = {None: 'PDOid'}, inplace = True)
+
+##Intersect with vineyards
+fishnet_inters = gpd.overlay(fishnet, vineyards_lau, how = 'intersection', keep_geom_type=True)
 fishnet_inters['area'] = fishnet_inters.to_crs(3035).geometry.area
+
+##For each grid, select the LAU with highest share of vineyard area
 fishnet_inters = fishnet_inters.sort_values('area', ascending=False).drop_duplicates(['grid_id'], keep = 'first')
 
-##For each grid, select LAUid with highest share of vineyard area
+##Merge back to restore original fishnet geometry
 fishnet_sub = fishnet.merge(fishnet_inters.drop('geometry', axis = 1), on = 'grid_id', how = 'inner')
 fishnet_sub['area_share'] = fishnet_sub['area'] / fishnet_sub.to_crs(3035).geometry.area
 fishnet_sub.drop(['area', 'grid_id'], axis = 1, inplace = True)
 fishnet_sub['id'] = np.arange(len(fishnet_sub))+1
 
-fishnet_sub.to_file(f'prepared_data/vineyards/vineyards_fishnet.shp')
+## Add PDOs (drops also polygons outside PDO areas)
+fishnet_sub = fishnet_sub.merge(gisco_pdo_link, on = 'GISCO_ID', how = 'inner')
 
-print('Fishnet intersected')
+fishnet_sub.to_file(f'data/vineyards/vineyards_fishnet.shp')
+
+print('Fishnet created')
 # fishnet_sub = gpd.read_file(f'prepared_data/vineyards/vineyards_fishnet.shp')
 ##Rasterize
 for col in ['id', 'area_share']:
@@ -77,7 +94,7 @@ for col in ['id', 'area_share']:
     }
 
     # Write output raster
-    with rasterio.open(f'prepared_data/vineyards/rasterized_{col}.tif','w',**profile) as dst:
+    with rasterio.open(f'data/vineyards/rasterized_{col}.tif','w',**profile) as dst:
         dst.write(rasterized,1)
 
     print(f"Fishnet with parameter {col} rasterized.")
