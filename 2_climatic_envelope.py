@@ -4,8 +4,12 @@ import numpy as np
 import xarray as xr
 from itertools import product
 import logging
+
 from functions import config
 from functions.get_climatic_window import get_climatic_window
+
+def chunker(seq, size):
+    return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 # create logger
 logger = logging.getLogger('main')
@@ -53,79 +57,84 @@ vn_weights = xr.open_dataset('data/vineyards/rasterized_area_share.tif').band_da
 ##Parameters for climatic data
 minx, miny, maxx, maxy = config.aois['europe']
 resolution = "1800arcsec"
-years = np.arange(2000, 2001)
+years = np.arange(2000, 2005)
 months = np.arange(3, 12)
 variables = ['tas', 'tasmin', 'tasmax', 'pr']
 
-url_template = "https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_{variable}_{resolution}_global_daily_{timestamp}.nc#mode=bytes"
-urls = []
-for var in variables:
-    urls.extend(
-        [url_template.format(variable=var, resolution=resolution, timestamp=f"{y}{m:02}")
-         for y,m in product(years, months)
-        ]
-    )
-logger.debug('Loading data into Dataset')
-ds = xr.open_mfdataset(urls, chunks="auto", join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
-
-if len(ds.chunks) > 0:
-    ds = ds.compute()
-for var in ds.keys():
-    if 'tas' in var:
-        ds[var] = ds[var] - 273.5
-
 clim_idx = []
-vn_arr_re = None
-vn_weights_re = None
+vn_arr_re = vn_arr.copy()
+vn_weights_re = vn_weights.copy()
 # _clim_idx = xr.open_dataset('envelopes/clim_idx_2000.nc').isel(Prime = 0)
-for v_name, Fcrit in list(zip(parker_sub['Prime Name'], parker_sub['F*']))[0:1]:
+for y_group in chunker(years, 1):
+    logger.info(f"Processing year(s): {', '.join(y_group.astype(str))}")
 
-    logger.info(f'Starting variety {v_name}!')
+    urls = []
+    for var in variables:
+        urls.extend(
+            [config.url_template.format(variable=var, resolution=resolution, timestamp=f"{y}{m:02}")
+            for y,m in product(y_group, months)
+            ]
+        )
 
-    clim_window = get_climatic_window(ds, Fcrit, save_veraison_plots = False, plot_name = v_name)
+    logger.debug('Loading data into Dataset')
+    ds = xr.open_mfdataset(urls, chunks="auto", join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
 
-    logger.debug('Calculating indices')
-    _clim_idx = xr.Dataset({
-        'gdd': (clim_window.tas - 10).clip(min = 0).sum('nr', skipna = True, min_count = 1),
-        'gdd_opt': (clim_window.tas - 25).clip(min = 0).sum('nr', skipna = True, min_count = 1),
-        'pr_sum': (clim_window.pr).sum('nr', skipna = True, min_count = 1),
-        'pr_max': (clim_window.pr).max('nr'),
+    if len(ds.chunks) > 0:
+        ds = ds.compute()
+    for var in ds.keys():
+        if 'tas' in var:
+            ds[var] = ds[var] - 273.5
 
-        'days_max': (clim_window.tasmax > 40).sum('nr', skipna = True, min_count = 1),
-        'days_min': (clim_window.tasmin < 10).sum('nr', skipna = True, min_count = 1),
-        'tasmin': (clim_window.tasmin).mean('nr'),
-        'tasmax': (clim_window.tasmax).mean('nr')
-    })
-    _clim_idx = _clim_idx.assign_coords({'Prime': v_name})
-    _clim_idx = _clim_idx.rio.write_crs(4326)
+    for v_name, Fcrit in list(zip(parker_sub['Prime Name'], parker_sub['F*'])):
 
-    if (vn_arr_re is None) or (vn_arr_re.shape != _clim_idx[list(_clim_idx.keys())[0]].squeeze(drop = True).shape):
-        vn_arr_re = vn_arr.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
-        vn_arr_re = vn_arr_re.rename({'x': 'lon', 'y': 'lat'})
+        logger.info(f'Processing variety {v_name}!')
 
-        vn_weights_re = vn_weights.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
-        vn_weights_re = vn_weights_re.rename({'x': 'lon', 'y': 'lat'})
+        clim_window = get_climatic_window(ds, Fcrit, save_veraison_plots = False, plot_name = v_name)
 
-        # weightmap_re = weightmap.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
-        # weightmap_re = weightmap_re.rename({'x': 'lon', 'y': 'lat'})
+        logger.debug('Calculating indices')
+        _clim_idx = xr.Dataset({
+            'gdd': (clim_window.tas - 10).clip(min = 0).sum('nr', skipna = True, min_count = 1),
+            'gdd_opt': (clim_window.tas - 25).clip(min = 0).sum('nr', skipna = True, min_count = 1),
+            'pr_sum': (clim_window.pr).sum('nr', skipna = True, min_count = 1),
+            'pr_max': (clim_window.pr).max('nr'),
 
-    ##Aggregate to LAU level
-    _clim_agg = (
-        (_clim_idx * vn_weights_re).groupby(vn_arr_re).sum(skipna=True, min_count=1)
-    ) / vn_weights_re.groupby(vn_arr_re).sum(skipna=True, min_count=1)
+            'days_max': (clim_window.tasmax > 40).sum('nr', skipna = True, min_count = 1),
+            'days_min': (clim_window.tasmin < 10).sum('nr', skipna = True, min_count = 1),
+            'tasmin': (clim_window.tasmin).mean('nr'),
+            'tasmax': (clim_window.tasmax).mean('nr')
+        })
+        _clim_idx = _clim_idx.assign_coords({'Prime': v_name})
+        _clim_idx = _clim_idx.rio.write_crs(4326)
 
-    # _clim_agg = (_clim_idx * weightmap_re).groupby(vn_arr_re).sum(skipna = True, min_count = 1)
+        if (vn_arr_re.lat.shape != _clim_idx.lat.shape) or (vn_arr_re.lon.shape != _clim_idx.lon.shape):
+            
+            logger.debug('Reprojecting')
+            vn_arr_re = vn_arr.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
+            vn_arr_re = vn_arr_re.rename({'x': 'lon', 'y': 'lat'})
 
-    _clim_agg = _clim_agg.to_dataframe().reset_index()
-    _clim_agg['id'] = _clim_agg['id'].astype(int)
-    # _clim_agg.dropna(subset = 'gdd', inplace = True)
+            vn_weights_re = vn_weights.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
+            vn_weights_re = vn_weights_re.rename({'x': 'lon', 'y': 'lat'})
 
-    ##Aggregate to PDO level
-    _clim_pdo = vn_fishnet[['id', 'PDOid']].merge(_clim_agg, on = 'id')
-    _clim_pdo.drop(['id', 'spatial_ref'], axis = 1, inplace = True, errors = 'ignore')
-    _clim_pdo = _clim_pdo.groupby(['PDOid', 'Prime', 'year']).mean(numeric_only = True)
+            # weightmap_re = weightmap.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
+            # weightmap_re = weightmap_re.rename({'x': 'lon', 'y': 'lat'})
 
-    clim_idx.append(_clim_pdo)
+        ##Aggregate to LAU level
+        _clim_agg = (
+            (_clim_idx * vn_weights_re).groupby(vn_arr_re).sum(skipna=True, min_count=1)
+        ) / vn_weights_re.groupby(vn_arr_re).sum(skipna=True, min_count=1)
+
+        # _clim_agg = (_clim_idx * weightmap_re).groupby(vn_arr_re).sum(skipna = True, min_count = 1)
+
+        _clim_agg = _clim_agg.to_dataframe().reset_index()
+        _clim_agg['id'] = _clim_agg['id'].astype(int)
+        # _clim_agg.dropna(subset = 'gdd', inplace = True)
+
+        ##Aggregate to PDO level
+        _clim_pdo = vn_fishnet[['id', 'PDOid']].merge(_clim_agg, on = 'id')
+        _clim_pdo.drop(['id', 'spatial_ref'], axis = 1, inplace = True, errors = 'ignore')
+        _clim_pdo = _clim_pdo.groupby(['PDOid', 'Prime', 'year']).mean(numeric_only = True)
+
+        clim_idx.append(_clim_pdo)
 
 # clim_idx = xr.concat(clim_idx, dim = 'Prime')
 
