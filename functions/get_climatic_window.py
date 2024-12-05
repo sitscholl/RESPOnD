@@ -28,25 +28,21 @@ import datetime
 # ds['tas'] = ds['tas'] - 273.5
 #####
 
-def get_climatic_window(ds, Fcrit, veraison_min=214, veraison_max=275, veraison_window=45, save_veraison_plots = False, plot_name = None):
-
+def calc_phen_date(tas, Fcrit, lower, upper):
     logger = logging.getLogger('main')
 
     ##Check if necessary dims are present
-    if not 'time' in ds.dims:
+    if not 'time' in tas.dims:
         raise ValueError('Time dimension not found in dataset.')
-    if not 'tas' in ds.keys():
-        raise ValueError('tas variable not found in dataset.')
 
     ##Check if unit is °C
-    tas_vars = [i for i in ds.keys() if 'tas' in i]
-    if (ds[tas_vars].max() > 100).to_array(dim = 'var').any().item():
+    if (tas.max() > 100).any().item():
         raise ValueError('Temperature values above 100 detected. Make sure units are in °C')
 
     ##Calculate temperature cumsum for each year after 60th doy
     logger.debug('Calculating temperature cumulative sum')
     tas_sum = (
-        (ds.tas.sel(time=(ds.time.dt.dayofyear >= 60)))
+        (tas.sel(time=(tas.time.dt.dayofyear >= 60)))
         .clip(min=0)
         .groupby("time.year")
         .cumsum()
@@ -65,37 +61,39 @@ def get_climatic_window(ds, Fcrit, veraison_min=214, veraison_max=275, veraison_
 
     ##Get date when Fcrit is reached for each year
     logger.debug('Getting veraison date for each year')
-    veraison_date = tas_diff.groupby('time.year').apply(lambda c: c.idxmin(dim="time"))
+    phen_date = tas_diff.groupby('time.year').apply(lambda c: c.idxmin(dim="time"))
 
     ##Find dates that are within veraison_min and veraison_max
     logger.debug('Masking veraison date')
-    veraison_date = veraison_date.where(
-        (veraison_date.dt.dayofyear < veraison_max)
-        & (veraison_date.dt.dayofyear >= veraison_min)
+    phen_date = phen_date.where(
+        (phen_date.dt.dayofyear < upper)
+        & (phen_date.dt.dayofyear >= lower)
     )
 
-    if save_veraison_plots:
-        plt.clf()
-        veraison_date.dt.dayofyear.plot(col = 'year')
-        if plot_name is None:
-            plot_name = f"veraison_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        plt.savefig(f'intermediate_results/veraison_maps/{plot_name}.png', dpi = 300)
+    return(phen_date)
+
+def get_climatic_window(ds, phen_date, window):
+    logger = logging.getLogger('main')
+
+    ##Check if necessary dims are present
+    if not 'time' in ds.dims:
+        raise ValueError('Time dimension not found in dataset.')
 
     ##Create a mask containing all pixels that have a veraison date
     logger.debug('Creating valid mask')
-    mask_veraison = veraison_date.groupby('year').apply(lambda x: x.notnull().any('year'))
+    mask_veraison = phen_date.groupby('year').apply(lambda x: x.notnull().any('year'))
 
     ##Expand array to add 45 days after Fcrit is reached
     logger.debug('Expanding array')
     veraison_range = xr.concat(
         [
-            (veraison_date + np.timedelta64(i, "D")).assign_coords({"nr": i})
-            for i in np.arange(veraison_window)
+            (phen_date + np.timedelta64(i, "D")).assign_coords({"nr": i})
+            for i in np.arange(window)
         ],
         dim="nr",
     )
 
-    ##Remove dates that 'jumped to' next year (when using max. threshold for veraison_date, this should not be needed anymore??)
+    ##Remove dates that 'jumped to' next year (when using max. threshold for phen_date, this should not be needed anymore??)
     # Fcrit_range = Fcrit_range.where(Fcrit_range.dt.month > 3)
 
     ##Check if required dates are present

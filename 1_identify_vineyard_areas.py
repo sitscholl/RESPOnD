@@ -10,7 +10,7 @@ import rioxarray
 from functions import config
 
 ##Load data
-minx, miny, maxx, maxy = config.aois["south_tyrol"]
+minx, miny, maxx, maxy = config.aois["europe"]
 dem = xr.open_dataset(config.dem_chelsa).sel(lat = slice(miny, maxy), lon = slice(minx, maxx))
 dem = dem.rio.write_crs(4326)
 
@@ -63,7 +63,7 @@ fishnet_sub = fishnet_sub.merge(gisco_pdo_link, on = 'GISCO_ID', how = 'inner')
 
 fishnet_sub.to_file(f'data/vineyards/vineyards_fishnet.shp')
 
-print('Fishnet created')
+print('Fishnet intersected')
 # fishnet_sub = gpd.read_file(f'prepared_data/vineyards/vineyards_fishnet.shp')
 ##Rasterize
 for col in ['id', 'area_share']:

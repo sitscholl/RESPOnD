@@ -2,6 +2,7 @@ import pooch
 
 dem_chelsa = r"https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_orog_30arcsec_global.nc#mode=bytes"
 gisco_lau = r"https://gisco-services.ec.europa.eu/distribution/v2/lau/gpkg/LAU_RG_01M_2021_4326.gpkg"
+url_template = "https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_{variable}_{resolution}_global_daily_{timestamp}.nc#mode=bytes"
 
 aois = {
     'europe': [-19.4, 27, 34.5, 57],

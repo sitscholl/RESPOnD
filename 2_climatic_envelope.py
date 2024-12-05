@@ -6,7 +6,7 @@ from itertools import product
 import logging
 
 from functions import config
-from functions.get_climatic_window import get_climatic_window
+from functions.get_climatic_window import calc_phen_date, get_climatic_window
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
@@ -68,6 +68,7 @@ vn_weights_re = vn_weights.copy()
 for y_group in chunker(years, 1):
     logger.info(f"Processing year(s): {', '.join(y_group.astype(str))}")
 
+    ##Generate list of urls
     urls = []
     for var in variables:
         urls.extend(
@@ -76,6 +77,7 @@ for y_group in chunker(years, 1):
             ]
         )
 
+    ##Load data into memory
     logger.debug('Loading data into Dataset')
     ds = xr.open_mfdataset(urls, chunks="auto", join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
 
@@ -85,11 +87,32 @@ for y_group in chunker(years, 1):
         if 'tas' in var:
             ds[var] = ds[var] - 273.5
 
+    ##Align weight and climate arrays
+    if (vn_arr_re.lat.shape != ds.lat.shape) or (vn_arr_re.lon.shape != ds.lon.shape):
+
+        logger.info('Reprojecting')
+        tmpl = ds.isel(time = 0).tas
+
+        vn_arr_re = (
+            vn_arr.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+            .rio.reproject_match(tmpl)
+            .rename({"x": "lon", "y": "lat"})
+        )
+
+        vn_weights_re = (
+            vn_weights.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
+            .rio.reproject_match(tmpl)
+            .rename({"x": "lon", "y": "lat"})
+        )
+
+        # weightmap_re = weightmap.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(tmpl).rename({'x': 'lon', 'y': 'lat'})
+
     for v_name, Fcrit in list(zip(parker_sub['Prime Name'], parker_sub['F*'])):
 
         logger.info(f'Processing variety {v_name}!')
 
-        clim_window = get_climatic_window(ds, Fcrit, save_veraison_plots = False, plot_name = v_name)
+        veraison_date = calc_phen_date(ds.tas, Fcrit, lower = 214, upper = 275)
+        clim_window = get_climatic_window(ds, veraison_date, window = 45)
 
         logger.debug('Calculating indices')
         _clim_idx = xr.Dataset({
@@ -106,19 +129,8 @@ for y_group in chunker(years, 1):
         _clim_idx = _clim_idx.assign_coords({'Prime': v_name})
         _clim_idx = _clim_idx.rio.write_crs(4326)
 
-        if (vn_arr_re.lat.shape != _clim_idx.lat.shape) or (vn_arr_re.lon.shape != _clim_idx.lon.shape):
-            
-            logger.debug('Reprojecting')
-            vn_arr_re = vn_arr.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
-            vn_arr_re = vn_arr_re.rename({'x': 'lon', 'y': 'lat'})
-
-            vn_weights_re = vn_weights.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
-            vn_weights_re = vn_weights_re.rename({'x': 'lon', 'y': 'lat'})
-
-            # weightmap_re = weightmap.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(_clim_idx.squeeze(drop = True))
-            # weightmap_re = weightmap_re.rename({'x': 'lon', 'y': 'lat'})
-
         ##Aggregate to LAU level
+        logger.debug('Aggregating indices')
         _clim_agg = (
             (_clim_idx * vn_weights_re).groupby(vn_arr_re).sum(skipna=True, min_count=1)
         ) / vn_weights_re.groupby(vn_arr_re).sum(skipna=True, min_count=1)
