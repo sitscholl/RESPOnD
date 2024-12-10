@@ -10,7 +10,7 @@ import rioxarray
 from functions import config
 
 ##Load data
-minx, miny, maxx, maxy = config.aois["europe"]
+minx, miny, maxx, maxy = config.aois["south_tyrol"]
 dem = xr.open_dataset(config.dem_chelsa).sel(lat = slice(miny, maxy), lon = slice(minx, maxx))
 dem = dem.rio.write_crs(4326)
 
@@ -31,7 +31,10 @@ fishnet = gpd.GeoDataFrame(data = {'grid_id': np.arange(len(geoms))}, geometry =
 print('Fishnet created')
 
 ##Prepare vineyards
-vineyards_shp = gpd.read_file('data/vineyards/vineyards_europe_explode.shp').to_crs(4326).cx[minx:maxx,miny:maxy]
+vineyards_luisa = gpd.read_file('data/vineyards/luisa_vineyards.shp').to_crs(4326).cx[minx:maxx,miny:maxy]
+vineyards_osm = gpd.read_file('data/vineyards/osm_vineyards.shp').to_crs(4326).cx[minx:maxx,miny:maxy]
+vineyards_shp = gpd.GeoDataFrame({'id': [1], 'geometry': [pd.concat([vineyards_luisa, vineyards_osm]).geometry.union_all()]}, crs = 4326)
+
 gisco_lau = gpd.read_file(config.gisco_lau)[['GISCO_ID', 'geometry']].cx[minx:maxx,miny:maxy]
 vineyards_lau = gpd.overlay(
     vineyards_shp, gisco_lau, how="intersection", keep_geom_type=True
