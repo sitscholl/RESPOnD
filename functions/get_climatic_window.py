@@ -28,7 +28,7 @@ import datetime
 # ds['tas'] = ds['tas'] - 273.5
 #####
 
-def calc_phen_date(tas, Fcrit, lower, upper):
+def calc_phen_date(tas, Fcrit):
     logger = logging.getLogger('main')
 
     ##Check if necessary dims are present
@@ -62,13 +62,6 @@ def calc_phen_date(tas, Fcrit, lower, upper):
     ##Get date when Fcrit is reached for each year
     logger.debug('Getting veraison date for each year')
     phen_date = tas_diff.groupby('time.year').apply(lambda c: c.idxmin(dim="time"))
-
-    ##Find dates that are within veraison_min and veraison_max
-    logger.debug('Masking veraison date')
-    phen_date = phen_date.where(
-        (phen_date.dt.dayofyear < upper)
-        & (phen_date.dt.dayofyear >= lower)
-    )
 
     return(phen_date)
 

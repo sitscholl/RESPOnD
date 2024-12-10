@@ -4,9 +4,11 @@ import numpy as np
 import xarray as xr
 from itertools import product
 import logging
+from pathlib import Path
 
 from functions import config
 from functions.get_climatic_window import calc_phen_date, get_climatic_window
+from functions.save_array import save_array
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
@@ -56,10 +58,11 @@ vn_weights = xr.open_dataset('data/vineyards/rasterized_area_share.tif').band_da
 
 ##Parameters for climatic data
 minx, miny, maxx, maxy = config.aois['europe']
-resolution = "1800arcsec"
+resolution = "300arcsec"
 years = np.arange(2000, 2005)
 months = np.arange(3, 12)
 variables = ['tas', 'tasmin', 'tasmax', 'pr']
+veraison_min, veraison_max = 214, 275
 
 clim_idx = []
 vn_arr_re = vn_arr.copy()
@@ -88,6 +91,7 @@ for y_group in chunker(years, 1):
             ds[var] = ds[var] - 273.5
 
     ##Align weight and climate arrays
+    ds = ds.rio.write_crs(4326)
     if (vn_arr_re.lat.shape != ds.lat.shape) or (vn_arr_re.lon.shape != ds.lon.shape):
 
         logger.info('Reprojecting')
@@ -111,7 +115,14 @@ for y_group in chunker(years, 1):
 
         logger.info(f'Processing variety {v_name}!')
 
-        veraison_date = calc_phen_date(ds.tas, Fcrit, lower = 214, upper = 275)
+        ##Calculate array with veraison dates
+        veraison_date = calc_phen_date(ds.tas, Fcrit)
+        save_array(veraison_date.dt.dayofyear, Path(f'data/results/veraison_dates/{v_name}3.nc'), unlimited_dims = 'year')
+        
+        ##Find dates that are within veraison_min and veraison_max
+        logger.debug('Masking veraison date')
+        phen_date = phen_date.where((phen_date.dt.dayofyear < veraison_max) & (phen_date.dt.dayofyear >= veraison_min))
+
         clim_window = get_climatic_window(ds, veraison_date, window = 45)
 
         logger.debug('Calculating indices')
@@ -148,6 +159,5 @@ for y_group in chunker(years, 1):
 
         clim_idx.append(_clim_pdo)
 
-# clim_idx = xr.concat(clim_idx, dim = 'Prime')
-
-# clim_idx.to_netcdf('envelopes/clim_idx_2000_2004.nc')
+tbl_idx = pd.concat(clim_idx)
+tbl_idx.to_csv('envelopes/tbl_index.csv')
