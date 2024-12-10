@@ -5,7 +5,8 @@ gisco_lau = r"https://gisco-services.ec.europa.eu/distribution/v2/lau/gpkg/LAU_R
 url_template = "https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_{variable}_{resolution}_global_daily_{timestamp}.nc#mode=bytes"
 
 aois = {
-    'europe': [-19.4, 27, 34.5, 57],
+    'europe': [-19.4, 27, 34.5, 57], #includes canary islands and great britain
+    'eu_pdo': [-9.4, 34.7, 33.2, 52.4], #w/o canary islands and great britain, as no vineyard landcover
     'south_tyrol': [10,46,12,47],
     'alpine_space': [3.69,42.98,17.16,50.56]
 }
