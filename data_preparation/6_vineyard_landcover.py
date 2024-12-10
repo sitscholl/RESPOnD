@@ -94,9 +94,21 @@ vin_shp = pd.concat(vin_shp)
 vin_shp[['osm_id', 'geometry']].to_file('data/vineyards/osm_vineyards.shp')
 
 
+###Luisa landcover
+# import rasterio
+# import xarray as xr
 
 # luisa = pooch.retrieve(url="https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/LUISA/EUROPE/Basemaps/LandUse/2018/LATEST/LUISA_basemap_020321_50m.tif", 
 #                        known_hash="5b82265265f2d6d1c474dac3f33fe62fd5be8e809676561b1bb64a96e821008f")
 
-# arr_luisa = xr.open_dataset(luisa, chunks={'lat': 1000, 'lon': 1000})
+# arr_luisa = xr.open_dataset(luisa, chunks={'lat': 1000, 'lon': 1000}).band_data.squeeze(drop = True)
+
+# eu_pdo = gpd.read_file(config.downloader.fetch('EU_PDO.gpkg')).to_crs(arr_luisa.rio.crs)
+# mask_poly = eu_pdo.geometry.union_all()
+# ShapeMask = rasterio.features.geometry_mask([mask_poly],
+#                                             out_shape=arr_luisa.shape,
+#                                             transform=arr_luisa.rio.transform(),
+#                                             invert=True)
+# ShapeMask = xr.DataArray(ShapeMask , dims=("y", "x"))
+
 # luisa_vineyards = arr_luisa.where(arr_luisa == 2210).compute()
