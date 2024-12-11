@@ -10,7 +10,7 @@ import rioxarray
 from functions import config
 
 ##Load data
-minx, miny, maxx, maxy = config.aois["south_tyrol"]
+minx, miny, maxx, maxy = config.aois["europe"]
 dem = xr.open_dataset(config.dem_chelsa).sel(lat = slice(miny, maxy), lon = slice(minx, maxx))
 dem = dem.rio.write_crs(4326)
 
