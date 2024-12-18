@@ -4,19 +4,20 @@ import numpy as np
 import geopandas as gpd
 import urllib.request
 
-pdo_path = Path('prepared_data/EU_PDO.gpkg')
-if not pdo_path.is_file():
-    urllib.request.urlretrieve(r"https://springernature.figshare.com/ndownloader/files/35955185", pdo_path)
+from functions import config
 
-pdo_shp = gpd.read_file(pdo_path)
-vineyards_shp = gpd.read_file('../data/vineyards_europe_lau.shp')
-pdo_varieties = pd.read_csv('prepared_data/candiago_2022.csv')
+pdo_shp = gpd.read_file(config.downloader.fetch('EU_PDO.gpkg'))
+pdo_varieties = pd.read_csv('data/candiago_2022.csv')
 
-eurostat = gpd.read_file('prepared_data/eurostat_2020.shp')
+eurostat = gpd.read_file('data/eurostat_2020.shp').to_crs(pdo_shp.crs)
 eurostat['Area'] = eurostat['Area 2020'].fillna(eurostat['Area 2015'])
 eurostat_shp = eurostat[["NUTS_ID", "geometry"]].drop_duplicates()
 
 varieties = np.sort(eurostat['Prime Name'].dropna().unique())
+
+vineyards_luisa = gpd.read_file('data/vineyards/luisa_vineyards.shp').to_crs(pdo_shp.crs)
+vineyards_osm = gpd.read_file('data/vineyards/osm_vineyards.shp').to_crs(pdo_shp.crs)
+vineyards_shp = gpd.GeoDataFrame({'id': [1], 'geometry': [pd.concat([vineyards_luisa, vineyards_osm]).geometry.union_all()]}, crs = pdo_shp.crs)
 
 ##Intersect PDOs and vineyards
 pdo_vineyards = (
@@ -31,7 +32,6 @@ pdo_vineyards = (
     .copy()
     .dissolve(by="PDOid")
     .reset_index()
-    .drop("LAUid", axis=1)
 )
 print('Intersected vineyards')
 
@@ -76,4 +76,4 @@ for var_name in varieties:
 pdo_areas = pd.concat(pdo_areas)
 pdo_areas_merge = pdo_varieties.merge(pdo_areas, on = ['PDOid', 'Prime Name'], how = 'left')
 
-pdo_areas_merge.to_csv('prepared_data/candiago_2022_area.csv')
+pdo_areas_merge.to_csv('data/candiago_2022_area.csv')
