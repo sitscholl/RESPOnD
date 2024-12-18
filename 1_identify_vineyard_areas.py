@@ -67,7 +67,7 @@ fishnet_sub = fishnet_sub.merge(gisco_pdo_link, on = 'GISCO_ID', how = 'inner')
 fishnet_sub.to_file(f'data/vineyards/vineyards_fishnet.shp')
 
 print('Fishnet intersected')
-# fishnet_sub = gpd.read_file(f'prepared_data/vineyards/vineyards_fishnet.shp')
+# fishnet_sub = gpd.read_file(f'data/vineyards/vineyards_fishnet.shp')
 ##Rasterize
 for col in ['id', 'area_share']:
     # create tuples of geometry, value pairs, where value is the attribute value you want to burn
