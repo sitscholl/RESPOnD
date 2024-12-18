@@ -3,3 +3,4 @@ test*
 *.docx
 thrash/*
 envelopes/*
+plotting/*
