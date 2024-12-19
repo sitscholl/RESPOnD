@@ -16,14 +16,13 @@ def chunker(seq, size):
 
 ##Arguments
 parser = argparse.ArgumentParser()
-parser.add_argument('-v', '--variables', default = ['tas'], nargs='+', help = 'Variables to download. Choose one or more of tas, tasmax, tasmin and pr')
+# parser.add_argument('-v', '--variables', default = ['tas'], nargs='+', help = 'Variables to download. Choose one or more of tas, tasmax, tasmin and pr')
 parser.add_argument('-a', '--aoi', default = 'europe', help = 'Name of area of interest for analysis.')
 parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Resolution of climate grids in arcseconds.')
 parser.add_argument('-ys', '--year_start', default = 2000, type = int, help = 'Starting year of climate grids.')
 parser.add_argument('-ye', '--year_end', default = 2001, type = int, help = 'Last year of climate grids. Must be greater than year_start.')
 
 args = parser.parse_args()
-variables = args.variables
 
 if args.aoi not in list(config.aois.keys()):
     raise ValueError(f"Invalid input for aoi argument. Choose one of {', '.join(list(config.aois.keys()))}")
@@ -43,14 +42,15 @@ years = np.arange(args.year_start, args.year_end)
 veraison_min, veraison_max = 214, 275
 clim_window_length = 45
 months = np.arange(3, 12)
+variables = ['tas', 'tasmax', 'tasmin', 'pr']
 
 ##Logger
 logger = logging.getLogger('main')
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
-# create console handler and set level to debug
+# create console handler
 ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
+ch.setLevel(logging.INFO)
 
 # create formatter
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -61,7 +61,7 @@ ch.setFormatter(formatter)
 # add ch to logger
 logger.addHandler(ch)
 
-logger.debug('Starting script')
+logger.info(f'Starting script. Processing years {args.year_start} to {args.year_end} for aoi {args.aoi} at a resolution of {args.resolution}arcsec')
 
 ##Load phenological data
 tbl_parker = pd.read_csv('data/parker_2013.csv').drop('Unnamed: 0', axis = 1).dropna(subset = 'Prime Name')
@@ -188,4 +188,4 @@ for y_group in chunker(years, 1):
         clim_idx.append(_clim_pdo)
 
 tbl_idx = pd.concat(clim_idx)
-tbl_idx.to_csv('envelopes/tbl_index.csv')
+tbl_idx.to_csv(f'data/results/climatic_indices/indices_{np.min(years)}_{np.max(years)}.csv')
