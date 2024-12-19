@@ -39,7 +39,7 @@ if any([args.year_start < 1979, args.year_end < 1979, args.year_start > 2016, ar
     raise ValueError('year_start and year_end arguments must both fall within 1979-2016. Values outside this range are not supported.')
 years = np.arange(args.year_start, args.year_end)
 
-#Fixed arguments
+# Fixed arguments
 veraison_min, veraison_max = 214, 275
 clim_window_length = 45
 months = np.arange(3, 12)
@@ -65,11 +65,12 @@ logger.debug('Starting script')
 
 ##Load phenological data
 tbl_parker = pd.read_csv('data/parker_2013.csv').drop('Unnamed: 0', axis = 1).dropna(subset = 'Prime Name')
-tbl_candiago = pd.read_csv('data/candiago_2022.csv').drop('Unnamed: 0', axis = 1)
+vin_area = pd.read_csv('data/candiago_2022_area.csv').drop(['Unnamed: 0.1', 'Unnamed: 0'], axis = 1).rename(columns = {'Prime Name': 'Prime'})
+
 parker_sub = (
     tbl_parker[["Prime Name", "F*"]]
     .copy()
-    .loc[tbl_parker["Prime Name"].isin(tbl_candiago["Prime Name"].unique())]
+    .loc[tbl_parker["Prime Name"].isin(vin_area["Prime"].unique())]
     .dropna(subset="Prime Name")
 )
 
@@ -141,7 +142,7 @@ for y_group in chunker(years, 1):
         ##Calculate array with veraison dates
         veraison_date = calc_phen_date(ds.tas, Fcrit)
         save_array(veraison_date.dt.dayofyear, Path(f'data/results/veraison_dates/{v_name}.nc'), unlimited_dims = 'year')
-        
+
         ##Find dates that are within veraison_min and veraison_max
         logger.debug('Masking veraison date')
         phen_date = phen_date.where((phen_date.dt.dayofyear < veraison_max) & (phen_date.dt.dayofyear >= veraison_min))
@@ -178,7 +179,11 @@ for y_group in chunker(years, 1):
         ##Aggregate to PDO level
         _clim_pdo = vn_fishnet[['id', 'PDOid']].merge(_clim_agg, on = 'id')
         _clim_pdo.drop(['id', 'spatial_ref'], axis = 1, inplace = True, errors = 'ignore')
-        _clim_pdo = _clim_pdo.groupby(['PDOid', 'Prime', 'year']).mean(numeric_only = True)
+        _clim_pdo = (
+            _clim_pdo.groupby(["PDOid", "Prime", "year"], as_index=False)
+            .mean(numeric_only=True)
+            .merge(vin_area[["PDOid", "Prime"]], how="inner") #drops rows with varieties that are not authorized in a PDO
+        )
 
         clim_idx.append(_clim_pdo)
 
