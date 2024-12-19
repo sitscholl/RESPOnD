@@ -5,6 +5,7 @@ import xarray as xr
 from itertools import product
 import logging
 from pathlib import Path
+import argparse
 
 from functions import config
 from functions.get_climatic_window import calc_phen_date, get_climatic_window
@@ -13,7 +14,37 @@ from functions.save_array import save_array
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
-# create logger
+##Arguments
+parser = argparse.ArgumentParser()
+parser.add_argument('-v', '--variables', default = ['tas'], nargs='+', help = 'Variables to download. Choose one or more of tas, tasmax, tasmin and pr')
+parser.add_argument('-a', '--aoi', default = 'europe', help = 'Name of area of interest for analysis.')
+parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Resolution of climate grids in arcseconds.')
+parser.add_argument('-ys', '--year_start', default = 2000, type = int, help = 'Starting year of climate grids.')
+parser.add_argument('-ye', '--year_end', default = 2001, type = int, help = 'Last year of climate grids. Must be greater than year_start.')
+
+args = parser.parse_args()
+variables = args.variables
+
+if args.aoi not in list(config.aois.keys()):
+    raise ValueError(f"Invalid input for aoi argument. Choose one of {', '.join(list(config.aois.keys()))}")
+minx, miny, maxx, maxy = config.aois[args.aoi]
+
+if args.resolution not in [30, 90, 300, 1800]:
+    raise ValueError(f"Invalid input for resolution argument. Choose one of: 30, 90, 300, 1800")
+resolution = f"{args.resolution}arcsec"
+
+if args.year_start >= args.year_end:
+    raise ValueError('year_start must be greater than year_end!')
+if any([args.year_start < 1979, args.year_end < 1979, args.year_start > 2016, args.year_end > 2016]):
+    raise ValueError('year_start and year_end arguments must both fall within 1979-2016. Values outside this range are not supported.')
+years = np.arange(args.year_start, args.year_end)
+
+#Fixed arguments
+veraison_min, veraison_max = 214, 275
+clim_window_length = 45
+months = np.arange(3, 12)
+
+##Logger
 logger = logging.getLogger('main')
 logger.setLevel(logging.DEBUG)
 
@@ -55,14 +86,6 @@ vn_weights = xr.open_dataset('data/vineyards/rasterized_area_share.tif').band_da
 
 # weightmap = vn_weights.groupby(vn_arr) / vn_weights.groupby(vn_arr).sum(skipna = True, min_count = 1)
 # weightmap = weightmap.drop_vars('id')
-
-##Parameters for climatic data
-minx, miny, maxx, maxy = config.aois['europe']
-resolution = "300arcsec"
-years = np.arange(2000, 2005)
-months = np.arange(3, 12)
-variables = ['tas', 'tasmin', 'tasmax', 'pr']
-veraison_min, veraison_max = 214, 275
 
 clim_idx = []
 vn_arr_re = vn_arr.copy()
@@ -117,13 +140,13 @@ for y_group in chunker(years, 1):
 
         ##Calculate array with veraison dates
         veraison_date = calc_phen_date(ds.tas, Fcrit)
-        save_array(veraison_date.dt.dayofyear, Path(f'data/results/veraison_dates/{v_name}3.nc'), unlimited_dims = 'year')
+        save_array(veraison_date.dt.dayofyear, Path(f'data/results/veraison_dates/{v_name}.nc'), unlimited_dims = 'year')
         
         ##Find dates that are within veraison_min and veraison_max
         logger.debug('Masking veraison date')
         phen_date = phen_date.where((phen_date.dt.dayofyear < veraison_max) & (phen_date.dt.dayofyear >= veraison_min))
 
-        clim_window = get_climatic_window(ds, veraison_date, window = 45)
+        clim_window = get_climatic_window(ds, veraison_date, window = clim_window_length)
 
         logger.debug('Calculating indices')
         _clim_idx = xr.Dataset({
