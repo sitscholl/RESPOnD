@@ -21,6 +21,7 @@ parser.add_argument('-a', '--aoi', default = 'europe', help = 'Name of area of i
 parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Resolution of climate grids in arcseconds.')
 parser.add_argument('-ys', '--year_start', default = 2000, type = int, help = 'Starting year of climate grids.')
 parser.add_argument('-ye', '--year_end', default = 2001, type = int, help = 'Last year of climate grids. Must be greater than year_start.')
+parser.add_argument('-yc', '--year_chunks', default = 1, type = int, help = 'Number of years that should be processed at once. Depends on RAM of host. Default is to process each year individually.')
 
 args = parser.parse_args()
 
@@ -37,6 +38,10 @@ if args.year_start >= args.year_end:
 if any([args.year_start < 1979, args.year_end < 1979, args.year_start > 2016, args.year_end > 2016]):
     raise ValueError('year_start and year_end arguments must both fall within 1979-2016. Values outside this range are not supported.')
 years = np.arange(args.year_start, args.year_end)
+
+if args.year_chunks < 1:
+    raise ValueError('year_chunks must at least be 1, smaller values are not allowed.')
+y_chunks = args.year_chunks
 
 # Fixed arguments
 veraison_min, veraison_max = 214, 275
@@ -92,7 +97,7 @@ clim_idx = []
 vn_arr_re = vn_arr.copy()
 vn_weights_re = vn_weights.copy()
 # _clim_idx = xr.open_dataset('envelopes/clim_idx_2000.nc').isel(Prime = 0)
-for y_group in chunker(years, 1):
+for y_group in chunker(years, y_chunks):
     logger.info(f"Processing year(s): {', '.join(y_group.astype(str))}")
 
     ##Generate list of urls
@@ -145,7 +150,7 @@ for y_group in chunker(years, 1):
 
         ##Find dates that are within veraison_min and veraison_max
         logger.debug('Masking veraison date')
-        phen_date = phen_date.where((phen_date.dt.dayofyear < veraison_max) & (phen_date.dt.dayofyear >= veraison_min))
+        veraison_date = veraison_date.where((veraison_date.dt.dayofyear < veraison_max) & (veraison_date.dt.dayofyear >= veraison_min))
 
         clim_window = get_climatic_window(ds, veraison_date, window = clim_window_length)
 
