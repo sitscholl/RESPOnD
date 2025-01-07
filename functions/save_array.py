@@ -1,60 +1,101 @@
 import netCDF4
 import xarray as xr
+from pathlib import Path
+import datetime
+import warnings
 
-def save_array(data, filename, unlimited_dims = None):
+####testing
+# import numpy as np
+# 
+# lx, ly, lz = 100, 100, 2
+# data = xr.DataArray(np.random.rand(lx, ly, lz)*100, coords = {'lon': np.arange(0, lx), 'lat': np.arange(0, ly), 'time': [datetime.datetime(2024,1,4), datetime.datetime(2024,1,5)]})
+# filename = 'thrash/save_array_test.nc'
+# unlimited_dim = 'time'
+# overwrite = False
 
-    if isinstance(unlimited_dims, str):
-        unlimited_dims = [unlimited_dims]
+# Path(filename).unlink()
+
+# with netCDF4.Dataset(filename, mode='a') as nc:
+#     print(nc)
+#     print(nc['time'])
+#     print(nc['time'][:])
+
+# with xr.open_dataset(filename) as ds:
+#     print(ds['var'].max(['lon', 'lat']))
+####
+
+def save_array(data, filename, unlimited_dim = None, overwrite = False):
+
+    if not isinstance(unlimited_dim, str):
+        raise ValueError(f'Unlimited_dim must be a string! Got {type(unlimited_dim)}')
+    if unlimited_dim not in data.dims:
+        raise ValueError(f'Unlimited_dim must be a dimension of data. Got {unlimited_dim}')
     if isinstance(data, xr.DataArray):
+        if data.name is None:
+            data.name = 'var'
         data = data.to_dataset()
+    if isinstance(filename, str):
+        filename = Path(filename)
 
     if not filename.is_file():
-        data.to_netcdf(filename, mode='w', unlimited_dims=unlimited_dims) #, encoding = {param: dict(zlib = True, complevel = 9)}
+        data.to_netcdf(filename, mode='w', unlimited_dim = [unlimited_dim]) #, encoding = {param: dict(zlib = True, complevel = 9)}
     else:
-        _append_to_netcdf(filename, data, unlimited_dims=unlimited_dims)
+        _append_to_netcdf(filename, data, unlimited_dim = unlimited_dim, overwrite = overwrite)
 
-#https://github.com/pydata/xarray/issues/1672
-def _expand_variable(nc_variable, data, expanding_dim, nc_shape, added_size):
-    # For time deltas, we must ensure that we use the same encoding as
-    # what was previously stored.
-    # We likely need to do this as well for variables that had custom
-    # econdings too
-    if hasattr(nc_variable, 'calendar'):
-        data.encoding = {
-            'units': nc_variable.units,
-            'calendar': nc_variable.calendar,
-        }
+# based on: https://github.com/pydata/xarray/issues/1672
+def _append_to_netcdf(filename, ds_to_append, unlimited_dim, overwrite = False):
 
-    data_encoded = xr.conventions.encode_cf_variable(data) # , name=name)
-    left_slices = data.dims.index(expanding_dim)
-    right_slices = data.ndim - left_slices - 1
-    nc_slice   = (slice(None),) * left_slices + (slice(nc_shape, nc_shape + added_size),) + (slice(None),) * (right_slices)
-    nc_variable[nc_slice] = data_encoded.data
-        
-def _append_to_netcdf(filename, ds_to_append, unlimited_dims):
-        
-    if len(unlimited_dims) != 1:
-        # TODO: change this so it can support multiple expanding dims
-        raise ValueError(
-            "We only support one unlimited dim for now, "
-            f"got {len(unlimited_dims)}.")
-
-    unlimited_dims = list(set(unlimited_dims))
-    expanding_dim = unlimited_dims[0]
-    
     with netCDF4.Dataset(filename, mode='a') as nc:
-        nc_dims = set(nc.dimensions.keys())
 
-        nc_coord = nc[expanding_dim]
-        nc_shape = len(nc_coord)
-        
-        added_size = len(ds_to_append[expanding_dim])
-        variables, attrs = xr.conventions.encode_dataset_coordinates(ds_to_append)
+        nc_coord = nc[unlimited_dim]
 
-        for name, data in variables.items():
-            if expanding_dim not in data.dims:
-                # Nothing to do, data assumed to the identical
-                continue
+        ##Transform coordinate values to netCDF units
+        dt_coords = [
+            datetime.datetime(j, m, d)
+            for d, m, j in zip(
+                ds_to_append[unlimited_dim].dt.day.values,
+                ds_to_append[unlimited_dim].dt.month.values,
+                ds_to_append[unlimited_dim].dt.year.values,
+            )
+        ]
+        dt_num = netCDF4.date2num(
+            dt_coords, units=nc_coord.units, calendar=nc_coord.calendar
+        )
+
+        contained_dt = [i in nc_coord[:] for i in dt_num]
+
+        if not overwrite:
+            if all(contained_dt):
+                raise ValueError(f"All slices in dimension {unlimited_dim} already contained in output file!")
+            elif any(contained_dt):
+                warnings.warn(f"Some slices of dimension {unlimited_dim} already contained in output file! Only new slices are written.")
             
-            nc_variable = nc[name]
-            _expand_variable(nc_variable, data, expanding_dim, nc_shape, added_size)
+                ##Remove already contained coords
+                ds_to_append = ds_to_append.sel({unlimited_dim: [not i for i in contained_dt]})
+                dt_num = [dt_num[i] for i,j in enumerate(contained_dt) if not j]
+
+        for var_name in ds_to_append.keys():
+            expand_data = ds_to_append[var_name]
+            nc_variable = nc[var_name]
+
+            # Ensure the same encoding as was previously stored.
+            if hasattr(nc_variable, 'calendar'):
+                expand_data.encoding = {
+                    'units': nc_variable.units,
+                    'calendar': nc_variable.calendar,
+                }
+
+            data_encoded = xr.conventions.encode_cf_variable(expand_data.variable)
+
+            nc_idx = []
+            l = 0
+            for i in dt_num:
+                if i in nc_coord[:]:
+                    nc_idx.append([c for c,j in enumerate(nc_coord[:]) if j == i][-1])
+                else:
+                    nc_idx.append(len(nc_coord[:])+l)
+                    l += 1
+            
+            print(nc_idx)
+            nc_variable[:,:,nc_idx] = data_encoded.data
+            nc_coord[nc_idx] = dt_num

@@ -142,7 +142,7 @@ for y_group in chunker(years, y_chunks):
 
     for v_name, Fcrit in list(zip(parker_sub['Prime Name'], parker_sub['F*'])):
 
-        logger.info(f'Processing variety {v_name}!')
+        logger.info(f'Processing variety {parker_sub["Prime Name"].tolist().index("PINOT NOIR")}/{len(parker_sub["Prime Name"])}: {v_name}!')
 
         ##Calculate array with veraison dates
         veraison_date = calc_phen_date(ds.tas, Fcrit)
