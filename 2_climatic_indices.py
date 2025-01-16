@@ -3,11 +3,11 @@ import geopandas as gpd
 import numpy as np
 import xarray as xr
 from itertools import product
-import logging
 from pathlib import Path
 import argparse
 
 from functions import config
+from functions.base_logger import logger
 from functions.get_climatic_window import calc_phen_date, get_climatic_window
 from functions.save_array import save_array
 
@@ -33,11 +33,11 @@ if args.resolution not in [30, 90, 300, 1800]:
     raise ValueError(f"Invalid input for resolution argument. Choose one of: 30, 90, 300, 1800")
 resolution = f"{args.resolution}arcsec"
 
-if args.year_start >= args.year_end:
+if args.year_start > args.year_end:
     raise ValueError('year_start must be greater than year_end!')
 if any([args.year_start < 1979, args.year_end < 1979, args.year_start > 2016, args.year_end > 2016]):
     raise ValueError('year_start and year_end arguments must both fall within 1979-2016. Values outside this range are not supported.')
-years = np.arange(args.year_start, args.year_end)
+years = np.arange(args.year_start, args.year_end+1)
 
 if args.year_chunks < 1:
     raise ValueError('year_chunks must at least be 1, smaller values are not allowed.')
@@ -46,25 +46,9 @@ y_chunks = args.year_chunks
 # Fixed arguments
 veraison_min, veraison_max = 214, 275
 clim_window_length = 45
-months = np.arange(3, 12)
+months = np.arange(3, 13)
 variables = ['tas', 'tasmax', 'tasmin', 'pr']
-
-##Logger
-logger = logging.getLogger('main')
-logger.setLevel(logging.INFO)
-
-# create console handler
-ch = logging.StreamHandler()
-ch.setLevel(logging.INFO)
-
-# create formatter
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-# add formatter to ch
-ch.setFormatter(formatter)
-
-# add ch to logger
-logger.addHandler(ch)
+out_csv = Path(f'data/results/{resolution}/climatic_indices.csv')
 
 logger.info(f'Starting script. Processing years {args.year_start} to {args.year_end} for aoi {args.aoi} at a resolution of {args.resolution}arcsec')
 
@@ -100,6 +84,8 @@ vn_weights_re = vn_weights.copy()
 for y_group in chunker(years, y_chunks):
     logger.info(f"Processing year(s): {', '.join(y_group.astype(str))}")
 
+    #TODO: Check which years of y_group are already present in climatic_indices table and use only those
+
     ##Generate list of urls
     urls = []
     for var in variables:
@@ -121,7 +107,7 @@ for y_group in chunker(years, y_chunks):
 
     ##Align weight and climate arrays
     ds = ds.rio.write_crs(4326)
-    if (vn_arr_re.lat.shape != ds.lat.shape) or (vn_arr_re.lon.shape != ds.lon.shape):
+    if (not vn_arr_re.lat.equals(ds.lat)) or (not vn_arr_re.lon.equals(ds.lon)):
 
         logger.info('Reprojecting')
         tmpl = ds.isel(time = 0).tas
@@ -142,11 +128,11 @@ for y_group in chunker(years, y_chunks):
 
     for v_name, Fcrit in list(zip(parker_sub['Prime Name'], parker_sub['F*'])):
 
-        logger.info(f'Processing variety {parker_sub["Prime Name"].tolist().index("PINOT NOIR")}/{len(parker_sub["Prime Name"])}: {v_name}!')
+        logger.info(f'Processing variety {parker_sub["Prime Name"].tolist().index(v_name)+1}/{len(parker_sub["Prime Name"])}: {v_name}!')
 
         ##Calculate array with veraison dates
         veraison_date = calc_phen_date(ds.tas, Fcrit)
-        save_array(veraison_date.dt.dayofyear, Path(f'data/results/veraison_dates/{v_name}.nc'), unlimited_dims = 'year')
+        save_array(veraison_date.dt.dayofyear, Path(f'data/results/{resolution}/veraison_dates/{v_name}.nc'), unlimited_dim = 'year')
 
         ##Find dates that are within veraison_min and veraison_max
         logger.debug('Masking veraison date')
@@ -190,7 +176,6 @@ for y_group in chunker(years, y_chunks):
             .merge(vin_area[["PDOid", "Prime"]], how="inner") #drops rows with varieties that are not authorized in a PDO
         )
 
-        clim_idx.append(_clim_pdo)
+        file_exists = out_csv.exists()
+        _clim_pdo.to_csv(out_csv, header=not file_exists, mode='a' if file_exists else 'w')
 
-tbl_idx = pd.concat(clim_idx)
-tbl_idx.to_csv(f'data/results/climatic_indices/indices_{np.min(years)}_{np.max(years)}.csv')
