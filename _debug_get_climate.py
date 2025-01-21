@@ -39,7 +39,7 @@ if __name__ == "__main__":
     logger.info('Program started!')
     ds = load_chelsa_w5e5(variables, resolution, years, months = np.arange(3, 13), aoi = (minx, miny, maxx, maxy))
 
-    if args.l and (len(ds.chunks) > 0):
+    if args.load and (len(ds.chunks) > 0):
         logger.debug('Loading dataset into memory')
         ds = ds.compute()
 
