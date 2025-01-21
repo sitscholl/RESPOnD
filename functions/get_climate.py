@@ -34,13 +34,10 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
             ]
         )
 
-    ##Load data into memory
+    ##Load data
     logger.debug('Loading data into Dataset')
     ds = xr.open_mfdataset(urls, chunks="auto", join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
 
-    if len(ds.chunks) > 0:
-        logger.debug('Loading dataset into memory')
-        ds = ds.compute()
     for var in ds.keys():
         logger.debug('Transforming data units')
         if 'tas' in var:
