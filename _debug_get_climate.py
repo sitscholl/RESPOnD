@@ -3,10 +3,20 @@ import argparse
 from functions import config
 from functions.base_logger import logger
 import numpy as np
+import platform
 from dask.distributed import Client, LocalCluster
+#from functions.base_cluster import cluster
 
 if __name__ == "__main__":
-    cluster = LocalCluster()
+
+    if platform.uname().system == "Windows":
+        cluster = LocalCluster()
+    elif platform.uname().system == "Linux":
+        from dask_jobqueue.slurm import SLURMRunner
+        cluster = SLURMRunner()
+    else:
+        raise ValueError(f"Undefined system for cluster specification. Got {platform.uname().system}")
+        
     client = Client(cluster)
 
     ##Arguments
