@@ -4,3 +4,4 @@ test*
 thrash/*
 envelopes/*
 plotting/*
+.config/*
