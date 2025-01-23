@@ -2,20 +2,16 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 import xarray as xr
-from itertools import product
 from pathlib import Path
 import argparse
-
-from functions import config
-from functions.base_logger import logger
-from functions.get_climatic_window import calc_phen_date, get_climatic_window
-from functions.save_array import save_array
+import pydist
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
 
 ##Arguments
 parser = argparse.ArgumentParser()
+parser.add_argument('out_dir', help = 'Output directory where results will be stored')
 # parser.add_argument('-v', '--variables', default = ['tas'], nargs='+', help = 'Variables to download. Choose one or more of tas, tasmax, tasmin and pr')
 parser.add_argument('-a', '--aoi', default = 'europe', help = 'Name of area of interest for analysis.')
 parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Resolution of climate grids in arcseconds.')
@@ -25,9 +21,9 @@ parser.add_argument('-yc', '--year_chunks', default = 1, type = int, help = 'Num
 
 args = parser.parse_args()
 
-if args.aoi not in list(config.aois.keys()):
-    raise ValueError(f"Invalid input for aoi argument. Choose one of {', '.join(list(config.aois.keys()))}")
-minx, miny, maxx, maxy = config.aois[args.aoi]
+if args.aoi not in list(pydist.config.aois.keys()):
+    raise ValueError(f"Invalid input for aoi argument. Choose one of {', '.join(list(pydist.config.aois.keys()))}")
+minx, miny, maxx, maxy = pydist.config.aois[args.aoi]
 
 if args.resolution not in [30, 90, 300, 1800]:
     raise ValueError(f"Invalid input for resolution argument. Choose one of: 30, 90, 300, 1800")
@@ -43,13 +39,19 @@ if args.year_chunks < 1:
     raise ValueError('year_chunks must at least be 1, smaller values are not allowed.')
 y_chunks = args.year_chunks
 
+out_dir = Path(args.out_dir, resolution)
+out_dir.mkdir(exist_ok=True, parents=True)
+out_phen = Path(out_dir, 'veraison_dates')
+out_phen.mkdir(exist_ok=True, parents=True)
+out_csv = Path(f'{out_dir}/climatic_indices.csv')
+
 # Fixed arguments
 veraison_min, veraison_max = 214, 275
 clim_window_length = 45
 months = np.arange(3, 13)
 variables = ['tas', 'tasmax', 'tasmin', 'pr']
-out_csv = Path(f'data/results/{resolution}/climatic_indices.csv')
 
+logger = pydist.logger
 logger.info(f'Starting script. Processing years {args.year_start} to {args.year_end} for aoi {args.aoi} at a resolution of {args.resolution}arcsec')
 
 ##Load phenological data
@@ -86,30 +88,14 @@ for y_group in chunker(years, y_chunks):
 
     #TODO: Check which years of y_group are already present in climatic_indices table and use only those
 
-    ##Generate list of urls
-    urls = []
-    for var in variables:
-        urls.extend(
-            [config.url_template.format(variable=var, resolution=resolution, timestamp=f"{y}{m:02}")
-            for y,m in product(y_group, months)
-            ]
-        )
-
-    ##Load data into memory
-    logger.debug('Loading data into Dataset')
-    ds = xr.open_mfdataset(urls, chunks="auto", join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
-
-    if len(ds.chunks) > 0:
-        ds = ds.compute()
-    for var in ds.keys():
-        if 'tas' in var:
-            ds[var] = ds[var] - 273.5
+    ##Load chelsa data
+    logger.info('Loading climate data')
+    ds = pydist.load_chelsa_w5e5(variables, resolution, y_group, months = months, aoi = (minx, miny, maxx, maxy))
 
     ##Align weight and climate arrays
-    ds = ds.rio.write_crs(4326)
     if (not vn_arr_re.lat.equals(ds.lat)) or (not vn_arr_re.lon.equals(ds.lon)):
 
-        logger.info('Reprojecting')
+        logger.info('Reprojecting climate data')
         tmpl = ds.isel(time = 0).tas
 
         vn_arr_re = (
@@ -131,14 +117,14 @@ for y_group in chunker(years, y_chunks):
         logger.info(f'Processing variety {parker_sub["Prime Name"].tolist().index(v_name)+1}/{len(parker_sub["Prime Name"])}: {v_name}!')
 
         ##Calculate array with veraison dates
-        veraison_date = calc_phen_date(ds.tas, Fcrit)
-        save_array(veraison_date.dt.dayofyear, Path(f'data/results/{resolution}/veraison_dates/{v_name}.nc'), unlimited_dim = 'year')
+        veraison_date = pydist.calc_phen_date(ds.tas, Fcrit)
+        pydist.save_array(veraison_date.dt.dayofyear, Path(f'{out_phen}/{v_name}.nc'), unlimited_dim = 'year')
 
         ##Find dates that are within veraison_min and veraison_max
         logger.debug('Masking veraison date')
         veraison_date = veraison_date.where((veraison_date.dt.dayofyear < veraison_max) & (veraison_date.dt.dayofyear >= veraison_min))
 
-        clim_window = get_climatic_window(ds, veraison_date, window = clim_window_length)
+        clim_window = pydist.get_climatic_window(ds, veraison_date, window = clim_window_length)
 
         logger.debug('Calculating indices')
         _clim_idx = xr.Dataset({
