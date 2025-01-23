@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from functions.base_logger import logger
+from pydist.base_logger import logger
 
 ####Tests
 ####
@@ -60,7 +60,8 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
         logger.debug('Transforming data units')
         if 'tas' in var:
             ds[var] = ds[var] - 273.5
-
+    ds = ds.rio.write_crs(4326)
+    
     return(ds)
 
 def load_cordex():
