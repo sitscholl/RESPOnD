@@ -4,6 +4,16 @@ from itertools import product
 
 from functions.base_logger import logger
 
+####Tests
+####
+# years = [2000]
+# variables = ['tas']
+# resolution = '1800arcsec'
+# months = np.arange(1, 3)
+# aoi = (-19.4, 27, 34.5, 57)
+####
+####
+
 def get_climate():
     pass
 
@@ -36,7 +46,8 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
 
     ##Load data
     logger.debug('Loading data into Dataset')
-    ds = xr.open_mfdataset(urls, chunks="auto", join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
+    #ds = xr.open_mfdataset(urls, chunks='auto', join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
+    ds = xr.combine_by_coords([xr.open_dataset(i) for i in urls], join = 'override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
 
     for var in ds.keys():
         logger.debug('Transforming data units')

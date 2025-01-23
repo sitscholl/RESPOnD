@@ -4,18 +4,18 @@ from functions import config
 from functions.base_logger import logger
 import numpy as np
 import platform
-from dask.distributed import Client, LocalCluster
-#from functions.base_cluster import cluster
+# from dask.distributed import Client, LocalCluster
+# #from functions.base_cluster import cluster
 
-if platform.uname().system == "Windows":
-    cluster = LocalCluster()
-elif platform.uname().system == "Linux":
-    from dask_jobqueue.slurm import SLURMRunner
-    cluster = SLURMRunner()
-else:
-    raise ValueError(f"Undefined system for cluster specification. Got {platform.uname().system}")
+# if platform.uname().system == "Windows":
+#     cluster = LocalCluster()
+# elif platform.uname().system == "Linux":
+#     from dask_jobqueue.slurm import SLURMRunner
+#     cluster = SLURMRunner()
+# else:
+#     raise ValueError(f"Undefined system for cluster specification. Got {platform.uname().system}")
 
-client = Client(cluster)
+# client = Client(cluster)
 
 ##Arguments
 parser = argparse.ArgumentParser()
@@ -24,7 +24,6 @@ parser.add_argument('-a', '--aoi', default = 'europe', help = 'Name of area of i
 parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Resolution of climate grids in arcseconds.')
 parser.add_argument('-ys', '--year_start', default = 2000, type = int, help = 'Starting year of climate grids.')
 parser.add_argument('-ye', '--year_end', default = 2001, type = int, help = 'Last year of climate grids. Must be greater than year_start.')
-parser.add_argument('-l', '--load', action = 'store_true', help = 'Load chunks into memory')
 
 args = parser.parse_args()
 
@@ -47,7 +46,7 @@ variables = args.variables
 logger.info('Program started!')
 ds = load_chelsa_w5e5(variables, resolution, years, months = np.arange(3, 13), aoi = (minx, miny, maxx, maxy))
 
-if args.load and (len(ds.chunks) > 0):
+if len(ds.chunks) > 0:
     logger.debug('Loading dataset into memory')
     ds = ds.compute()
 
