@@ -43,7 +43,7 @@ out_dir = Path(args.out_dir, resolution)
 out_dir.mkdir(exist_ok=True, parents=True)
 out_phen = Path(out_dir, 'veraison_dates')
 out_phen.mkdir(exist_ok=True, parents=True)
-out_csv = Path(f'{out_dir}/climatic_indices.csv')
+out_csv = Path(out_dir, 'climatic_indices.csv')
 
 # Fixed arguments
 veraison_min, veraison_max = 214, 275
@@ -93,25 +93,9 @@ for y_group in chunker(years, y_chunks):
     ds = pydist.load_chelsa_w5e5(variables, resolution, y_group, months = months, aoi = (minx, miny, maxx, maxy))
 
     ##Align weight and climate arrays
-    if (not vn_arr_re.lat.equals(ds.lat)) or (not vn_arr_re.lon.equals(ds.lon)):
+    vn_arr_re, vn_weights_re = pydist.align_arrays(vn_arr, vn_weights, base = ds.isel(time = 0).tas)
 
-        logger.info('Reprojecting climate data')
-        tmpl = ds.isel(time = 0).tas
-
-        vn_arr_re = (
-            vn_arr.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
-            .rio.reproject_match(tmpl)
-            .rename({"x": "lon", "y": "lat"})
-        )
-
-        vn_weights_re = (
-            vn_weights.rio.set_spatial_dims(x_dim="lon", y_dim="lat")
-            .rio.reproject_match(tmpl)
-            .rename({"x": "lon", "y": "lat"})
-        )
-
-        # weightmap_re = weightmap.rio.set_spatial_dims(x_dim = 'lon', y_dim = 'lat').rio.reproject_match(tmpl).rename({'x': 'lon', 'y': 'lat'})
-
+    ##Iterate over varieties
     for v_name, Fcrit in list(zip(parker_sub['Prime Name'], parker_sub['F*'])):
 
         logger.info(f'Processing variety {parker_sub["Prime Name"].tolist().index(v_name)+1}/{len(parker_sub["Prime Name"])}: {v_name}!')
