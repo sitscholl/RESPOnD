@@ -5,6 +5,11 @@ import xarray as xr
 from pathlib import Path
 import argparse
 import pydist
+import logging
+import logging.config
+
+logging.config.fileConfig(".config/logging.conf", disable_existing_loggers=False)
+logger = logging.getLogger(__name__)
 
 def chunker(seq, size):
     return (seq[pos:pos + size] for pos in range(0, len(seq), size))
@@ -51,7 +56,6 @@ clim_window_length = 45
 months = np.arange(3, 13)
 variables = ['tas', 'tasmax', 'tasmin', 'pr']
 
-logger = pydist.logger
 logger.info(f'Starting script. Processing years {args.year_start} to {args.year_end} for aoi {args.aoi} at a resolution of {args.resolution}arcsec')
 
 ##Load phenological data
@@ -93,6 +97,7 @@ for y_group in chunker(years, y_chunks):
     ds = pydist.load_chelsa_w5e5(variables, resolution, y_group, months = months, aoi = (minx, miny, maxx, maxy))
 
     ##Align weight and climate arrays
+    sys.exit()
     vn_arr_re, vn_weights_re = pydist.align_arrays(vn_arr, vn_weights, base = ds.isel(time = 0).tas)
 
     ##Iterate over varieties

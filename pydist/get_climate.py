@@ -5,8 +5,9 @@ import requests
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import logging
 
-from pydist.base_logger import logger
+logger = logging.getLogger(__name__)
 
 ####Tests
 ####

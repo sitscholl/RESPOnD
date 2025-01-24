@@ -1,7 +1,9 @@
 import xarray as xr
 import rioxarray
 from rasterio.enums import Resampling
-from pydist.base_logger import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 def align_arrays(*objects, base, method = 'bilinear', x_dim = 'lon', y_dim = 'lat'):
 
