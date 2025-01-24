@@ -97,7 +97,6 @@ for y_group in chunker(years, y_chunks):
     ds = pydist.load_chelsa_w5e5(variables, resolution, y_group, months = months, aoi = (minx, miny, maxx, maxy))
 
     ##Align weight and climate arrays
-    sys.exit()
     vn_arr_re, vn_weights_re = pydist.align_arrays(vn_arr, vn_weights, base = ds.isel(time = 0).tas)
 
     ##Iterate over varieties
