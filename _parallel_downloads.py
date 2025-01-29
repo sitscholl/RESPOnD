@@ -11,7 +11,11 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument('threads', default = 1, type = int, help = 'Number of threads')
-n_threads = parser.parse_args().threads
+parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Resolution of climate grids in arcseconds.')
+
+args = parser.parse_args()
+n_threads = args.threads
+res = f"{args.resolution}arcsec"
 
 logging.config.fileConfig(".config/logging.conf", disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
@@ -19,7 +23,6 @@ logger = logging.getLogger(__name__)
 logger.info(f'Program started using {n_threads} threads')
 
 url_template = "https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_{variable}_{resolution}_global_daily_{timestamp}.nc" ##mode=bytes
-res = "1800arcsec"
 
 urls = []
 for var in ['tas', 'tasmin', 'tasmax', 'pr']:
