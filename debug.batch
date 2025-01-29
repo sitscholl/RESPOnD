@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#SBATCH --ntasks=3
+#SBATCH --mem=1G
+#SBATCH --partition=debug
+#SBATCH --account=alpenv_respond
+#SBATCH --time=00:05:00
+#SBATCH --output=debug-%j.out
+#SBATCH --error=debug-%j.err
+
+module load anaconda3
+conda activate /home/clusterusers/sitscholl_eurac/respond
+
+python _parallel_downloads.py 100 -r 30
