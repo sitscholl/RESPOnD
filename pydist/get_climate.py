@@ -52,10 +52,10 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
     ##Load data
     logger.debug('Downloading files')
     with TemporaryDirectory() as tempdir:
-        files = [_download_files(i, tempdir) for i in urls]
+        dwnloads = [_download_files(i, tempdir) for i in urls]
         logger.debug('Loading data into Dataset')
         #ds = xr.open_mfdataset(urls, chunks='auto', join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
-        ds = xr.combine_by_coords([xr.open_dataset(i) for i in files], join = 'override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
+        ds = xr.combine_by_coords([xr.open_dataset(i[0]) for i in dwnloads if i[1] is None], join = 'override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
 
     for var in ds.keys():
         logger.debug('Transforming data units')
@@ -72,9 +72,15 @@ def load_cordex():
 def _download_files(url, download_dir):
 
     local_filename = Path(download_dir, url.split('/')[-1])
-    logger.debug(f"Downloading {url} to {local_filename}")
-    with requests.get(url, stream=True) as r:
-        with open(local_filename, 'wb') as f:
-            shutil.copyfileobj(r.raw, f)
+    logger.info(f"Downloading {url} to {local_filename}")
 
-    return local_filename
+    try:
+        with requests.get(url, stream=True) as r:
+            with open(local_filename, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+
+        return (local_filename, None)
+
+    except Exception as e:
+        logger.error(f"Error in downloading file {url.split('/')[-1]}", exc_info=True)
+        return(local_filename, e)
