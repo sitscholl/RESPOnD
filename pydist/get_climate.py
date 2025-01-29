@@ -5,6 +5,9 @@ import requests
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from multiprocessing.pool import ThreadPool
+from functools import partial
+from time import time as timer
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,7 +25,7 @@ logger = logging.getLogger(__name__)
 def get_climate():
     pass
 
-def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), aoi = None):
+def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), aoi = None, n_threads = 1):
 
     url_template = "https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_{variable}_{resolution}_global_daily_{timestamp}.nc" ##mode=bytes
     
@@ -52,10 +55,11 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
     ##Load data
     logger.debug('Downloading files')
     with TemporaryDirectory() as tempdir:
-        dwnloads = [_download_files(i, tempdir) for i in urls]
+        dwnloads = _multithreaded_download(urls, n_threads, download_dir = tempdir)
+        
         logger.debug('Loading data into Dataset')
         #ds = xr.open_mfdataset(urls, chunks='auto', join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
-        ds = xr.combine_by_coords([xr.open_dataset(i[0]) for i in dwnloads if i[1] is None], join = 'override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
+        ds = xr.combine_by_coords([xr.open_dataset(i) for i in dwnloads], join = 'override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
 
     for var in ds.keys():
         logger.debug('Transforming data units')
@@ -72,7 +76,7 @@ def load_cordex():
 def _download_files(url, download_dir):
 
     local_filename = Path(download_dir, url.split('/')[-1])
-    logger.info(f"Downloading {url} to {local_filename}")
+    logger.debug(f"Downloading {url} to {local_filename}")
 
     try:
         with requests.get(url, stream=True) as r:
@@ -82,5 +86,23 @@ def _download_files(url, download_dir):
         return (local_filename, None)
 
     except Exception as e:
-        logger.error(f"Error in downloading file {url.split('/')[-1]}", exc_info=True)
         return(local_filename, e)
+
+def _multithreaded_download(urls, n_threads, download_dir):
+
+    logger.info(f'Download of {len(urls)} files started using {n_threads} threads')
+    start = timer()
+
+    dfunc = partial(_download_files, download_dir = download_dir)
+    results = ThreadPool(n_threads).imap_unordered(dfunc, urls)
+
+    local_files = []
+    for fnam, error in results:
+        if error is None:
+            logger.info(f"{fnam} fetched after {timer() - start:.2f}s")
+            local_files.append(fnam)
+        else:
+            logger.error(f"Error fetching {fnam}: {error}")
+            
+    logger.info(f"Downloads finished. Elapsed Time: {timer() - start:.2f}s" )
+    return(local_files)

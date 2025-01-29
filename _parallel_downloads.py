@@ -2,7 +2,8 @@ from multiprocessing.pool import ThreadPool
 from time import time as timer
 from itertools import product
 import numpy as np
-from pydist.get_climate import _download_files
+from pydist.get_climate import load_chelsa_w5e5
+from pydist import config
 from tempfile import TemporaryDirectory
 from functools import partial
 import logging
@@ -16,31 +17,11 @@ parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Re
 args = parser.parse_args()
 n_threads = args.threads
 res = f"{args.resolution}arcsec"
+minx, miny, maxx, maxy = config.aois['europe']
 
 logging.config.fileConfig(".config/logging.conf", disable_existing_loggers=False)
 logger = logging.getLogger(__name__)
 
 logger.info(f'Program started using {n_threads} threads')
 
-url_template = "https://files.isimip.org/ISIMIP3a/InputData/climate/atmosphere/obsclim/global/daily/historical/CHELSA-W5E5/chelsa-w5e5_obsclim_{variable}_{resolution}_global_daily_{timestamp}.nc" ##mode=bytes
-
-urls = []
-for var in ['tas', 'tasmin', 'tasmax', 'pr']:
-    urls.extend(
-        [url_template.format(variable=var, resolution=res, timestamp=f"{y}{m:02}")
-        for y,m in product([2000], np.arange(3, 13))
-        ]
-    )
-
-with TemporaryDirectory() as tempdir:
-    start = timer()
-    dfunc = partial(_download_files, download_dir = tempdir)
-    results = ThreadPool(n_threads).imap_unordered(dfunc, urls)
-
-    for fnam, error in results:
-        if error is None:
-            logger.info("%r fetched after %ss" % (fnam, timer() - start))
-        else:
-            logger.error("error fetching %r: %s" % (fnam, error))
-            
-    logger.info("Elapsed Time: %s" % (timer() - start,))
+ds = load_chelsa_w5e5(['tas', 'pr', 'tasmin', 'tasmax'], resolution = res, years = [2000], months = np.arange(3, 13), aoi = (minx, miny, maxx, maxy), n_threads = n_threads)
