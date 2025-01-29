@@ -23,6 +23,7 @@ parser.add_argument('-r', '--resolution', default = 1800, type = int, help = 'Re
 parser.add_argument('-ys', '--year_start', default = 2000, type = int, help = 'Starting year of climate grids.')
 parser.add_argument('-ye', '--year_end', default = 2001, type = int, help = 'Last year of climate grids. Must be greater than year_start.')
 parser.add_argument('-yc', '--year_chunks', default = 1, type = int, help = 'Number of years that should be processed at once. Depends on RAM of host. Default is to process each year individually.')
+parser.add_argument('-tr', '--threads', default = 1, type = int, help = 'Number of threads to use for downloading files')
 
 args = parser.parse_args()
 
@@ -94,7 +95,7 @@ for y_group in chunker(years, y_chunks):
 
     ##Load chelsa data
     logger.info('Loading climate data')
-    ds = pydist.load_chelsa_w5e5(variables, resolution, y_group, months = months, aoi = (minx, miny, maxx, maxy))
+    ds = pydist.load_chelsa_w5e5(variables, resolution, y_group, months = months, aoi = (minx, miny, maxx, maxy), n_threads = args.threads)
 
     ##Align weight and climate arrays
     vn_arr_re, vn_weights_re = pydist.align_arrays(vn_arr, vn_weights, base = ds.isel(time = 0).tas)
