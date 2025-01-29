@@ -33,16 +33,12 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
         years = [years]
     if isinstance(months, int):
         months = [months]
-    if not isinstance(aoi, tuple):
-        raise ValueError(f"aoi must be provided as tuple. Got {type(aoi)}")
     if not all([i in ['orog', 'pr', 'rsds', 'tas', 'tasmax', 'tasmin'] for i in variables]):
         raise ValueError(f"Variables must be one of 'orog', 'pr', 'rsds', 'tas', 'tasmax', 'tasmin'. Got {', '.join(variables)}")
 
     if (min(years) < 1979) or (max(years) > 2016):
         raise ValueError(f'years must fall within 1979-2016. Values outside this range are not supported. Got {", ".join(years)}')
     
-    minx, miny, maxx, maxy = aoi
-
     ##Generate list of urls
     urls = []
     for var in variables:
@@ -60,7 +56,14 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
         logger.debug('Loading data into Dataset')
         logger.debug(f"Downloaded files: {';'.join([str(i) for i in dwnloads])}")
         #ds = xr.open_mfdataset(urls, chunks='auto', join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
-        ds = xr.combine_by_coords([xr.open_dataset(i) for i in dwnloads], join = 'override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
+        ds = xr.combine_by_coords([xr.open_dataset(i) for i in dwnloads], join = 'override', combine_attrs='override')
+        
+        if aoi is not None:
+            if not isinstance(aoi, tuple):
+                raise ValueError(f"aoi must be provided as tuple. Got {type(aoi)}")
+            
+            minx, miny, maxx, maxy = aoi
+            ds = ds.sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
 
     for var in ds.keys():
         logger.debug('Transforming data units')
