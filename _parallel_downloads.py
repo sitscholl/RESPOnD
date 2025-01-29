@@ -6,6 +6,7 @@ from pydist.get_climate import _download_files
 from tempfile import TemporaryDirectory
 from functools import partial
 import logging
+import logging.config
 import argparse
 
 parser = argparse.ArgumentParser()
