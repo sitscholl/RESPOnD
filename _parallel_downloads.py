@@ -39,7 +39,7 @@ with TemporaryDirectory() as tempdir:
 
     for fnam, error in results:
         if error is None:
-            logger.info("%r fetched in %ss" % (fnam, timer() - start))
+            logger.info("%r fetched after %ss" % (fnam, timer() - start))
         else:
             logger.error("error fetching %r: %s" % (fnam, error))
             
