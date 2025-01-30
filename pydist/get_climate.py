@@ -5,7 +5,6 @@ import requests
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import multiprocessing
 from multiprocessing.pool import ThreadPool
 from functools import partial
 from time import time as timer
