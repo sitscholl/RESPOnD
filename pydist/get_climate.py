@@ -86,10 +86,9 @@ def _download_files(url, download_dir):
     logger.debug(f"Downloading {url} to {local_filename}")
 
     try:
-        with requests.get(url) as r:
+        with requests.get(url, stream=True) as r:
             with open(local_filename, 'wb') as f:
-                #shutil.copyfileobj(r.raw, f)
-                f.write(r.content)
+                shutil.copyfileobj(r.raw, f)
 
         return (local_filename, None)
 
@@ -102,7 +101,7 @@ def _multithreaded_download(urls, n_threads, download_dir):
     start = timer()
 
     dfunc = partial(_download_files, download_dir = download_dir)
-    results = ThreadPool(n_threads).imap_unordered(dfunc, urls)
+    results = ThreadPool(n_threads).imap(dfunc, urls)
 
     local_files = []
     for fnam, error in results:
