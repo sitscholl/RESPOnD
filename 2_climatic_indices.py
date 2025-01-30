@@ -87,11 +87,20 @@ vn_weights = xr.open_dataset('data/vineyards/rasterized_area_share.tif').band_da
 clim_idx = []
 vn_arr_re = vn_arr.copy()
 vn_weights_re = vn_weights.copy()
-# _clim_idx = xr.open_dataset('envelopes/clim_idx_2000.nc').isel(Prime = 0)
+
 for y_group in chunker(years, y_chunks):
     logger.info(f"Processing year(s): {', '.join(y_group.astype(str))}")
 
-    #TODO: Check which years of y_group are already present in climatic_indices table and use only those
+    ##Skip years that were already processed
+    if out_csv.is_file():
+        tbl_processed = pd.read_csv(out_csv)
+        years_processed = [i for i in y_group if i in tbl_processed['year'].unique()]
+        y_group = [i for i in y_group if i not in years_processed]
+
+        if len(years_processed) > 0:
+            logger.info(f"Skipping already processed years: {', '.join(years_processed)}")
+        if len(y_group) == 0:
+            continue
 
     ##Load chelsa data
     logger.info('Loading climate data')
