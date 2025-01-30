@@ -143,7 +143,7 @@ if __name__ == "__main__":
     ds = load_chelsa_w5e5(
         args.variables,
         resolution=f"{args.resolution}arcsec",
-        years=np.arange(args.year_start, args.year_end + 1),
+        years=np.arange(args.year_start, args.year_end),
         months=np.arange(3, 13),
         aoi=(minx, miny, maxx, maxy),
         n_threads=args.threads,
