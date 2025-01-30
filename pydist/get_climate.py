@@ -6,7 +6,7 @@ import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import multiprocessing
-from multiprocessing.pool import Pool
+from multiprocessing.pool import ThreadPool
 from functools import partial
 from time import time as timer
 import logging
@@ -102,7 +102,7 @@ def _multithreaded_download(urls, n_threads, download_dir):
     start = timer()
 
     dfunc = partial(_download_files, download_dir = download_dir)
-    results = Pool(n_threads).imap_unordered(dfunc, urls)
+    results = ThreadPool(n_threads).imap_unordered(dfunc, urls)
 
     local_files = []
     for fnam, error in results:
