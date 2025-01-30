@@ -8,7 +8,6 @@ from tempfile import TemporaryDirectory
 from multiprocessing.pool import ThreadPool
 from functools import partial
 import time
-import random
 import logging
 
 logger = logging.getLogger(__name__)
