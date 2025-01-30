@@ -5,6 +5,7 @@ import requests
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import multiprocessing
 from multiprocessing.pool import Pool
 from functools import partial
 from time import time as timer
@@ -137,6 +138,8 @@ if __name__ == "__main__":
     parser.add_argument('-d', '--ddir', default = TemporaryDirectory(), help = 'Directory to store downloaded files')
 
     args = parser.parse_args()
+
+    logger.info(f"Cpu-count: {multiprocessing.cpu_count()}")
 
     minx, miny, maxx, maxy = aois[args.aoi]
     ds = load_chelsa_w5e5(
