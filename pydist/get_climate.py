@@ -101,7 +101,7 @@ def _multithreaded_download(urls, n_threads, download_dir):
     start = timer()
 
     dfunc = partial(_download_files, download_dir = download_dir)
-    results = ThreadPool(n_threads).imap(dfunc, urls)
+    results = [r for r in ThreadPool(n_threads).imap_unordered(dfunc, urls)]
 
     local_files = []
     for fnam, error in results:
