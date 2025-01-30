@@ -44,7 +44,7 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
     if aoi is not None:
         minx, miny, maxx, maxy = aoi
     else:
-        -180, -90, 180, 90 = aoi #global bounding box
+        minx, miny, maxx, maxy = (-180, -90, 180, 90)  #global bounding box
     
     ##Generate list of urls
     urls = []
