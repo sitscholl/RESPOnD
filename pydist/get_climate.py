@@ -7,7 +7,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from multiprocessing.pool import ThreadPool
 from functools import partial
-from time import time as timer
+import time
+import random
 import logging
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ def load_cordex():
     pass
 
 ##https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
-def _download_files(url, download_dir):
+def _download_files(url, download_dir, attempts = 3):
 
     if isinstance(download_dir, TemporaryDirectory):
         local_filename = Path(download_dir.name, url.split('/')[-1])
@@ -85,20 +86,24 @@ def _download_files(url, download_dir):
 
     logger.debug(f"Downloading {url} to {local_filename}")
 
-    try:
-        with requests.get(url, stream=True) as r:
-            with open(local_filename, 'wb') as f:
-                shutil.copyfileobj(r.raw, f)
+    for attempt in range(attempts):  # Retry up to n times
 
-        return (local_filename, None)
+        try:
+            with requests.get(url, stream=True, timeout=30) as r:
+                r.raise_for_status()  # Raise an error for failed requests
+                with open(local_filename, 'wb') as f:
+                    shutil.copyfileobj(r.raw, f)
+            return (local_filename, None)  # Success, return early
 
-    except Exception as e:
-        return(local_filename, e)
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Retry {attempt + 1} for {url}: {e}")
+            time.sleep(2 ** (attempt+1))
+    return (local_filename, f"Failed after {attempts} retries")  # Fail after retries
 
 def _multithreaded_download(urls, n_threads, download_dir):
 
     logger.info(f'Download of {len(urls)} files started using {n_threads} threads')
-    start = timer()
+    start = time.time()
 
     dfunc = partial(_download_files, download_dir = download_dir)
     results = ThreadPool(n_threads).imap_unordered(dfunc, urls)
@@ -106,12 +111,12 @@ def _multithreaded_download(urls, n_threads, download_dir):
     local_files = []
     for fnam, error in results:
         if error is None:
-            logger.info(f"{fnam} fetched after {timer() - start:.2f}s")
+            logger.info(f"{fnam} fetched after {time.time() - start:.2f}s")
             local_files.append(fnam)
         else:
             logger.error(f"Error fetching {fnam}: {error}")
             
-    logger.info(f"Downloads finished. Elapsed Time: {timer() - start:.2f}s" )
+    logger.info(f"Downloads finished. Elapsed Time: {time.time() - start:.2f}s" )
     return(local_files)
 
 if __name__ == "__main__":
