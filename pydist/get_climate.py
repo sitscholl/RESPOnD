@@ -86,7 +86,7 @@ def _download_files(url, download_dir):
     logger.debug(f"Downloading {url} to {local_filename}")
 
     try:
-        with requests.get(url, stream=True) as r:
+        with requests.get(url) as r:
             with open(local_filename, 'wb') as f:
                 #shutil.copyfileobj(r.raw, f)
                 f.write(r.content)
