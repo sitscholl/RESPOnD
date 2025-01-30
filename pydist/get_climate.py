@@ -88,7 +88,8 @@ def _download_files(url, download_dir):
     try:
         with requests.get(url, stream=True) as r:
             with open(local_filename, 'wb') as f:
-                shutil.copyfileobj(r.raw, f)
+                #shutil.copyfileobj(r.raw, f)
+                f.write(r.content)
 
         return (local_filename, None)
 
