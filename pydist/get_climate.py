@@ -76,12 +76,15 @@ def load_cordex():
     pass
 
 ##https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
-def _download_files(url, download_dir, attempts = 3):
+def _download_files(url, download_dir, attempts = 3, overwrite = False):
 
     if isinstance(download_dir, TemporaryDirectory):
         local_filename = Path(download_dir.name, url.split('/')[-1])
     else:
         local_filename = Path(download_dir, url.split('/')[-1])
+
+    if local_filename.is_file() and (not overwrite):
+        return(local_filename, None)
 
     logger.debug(f"Downloading {url} to {local_filename}")
 
