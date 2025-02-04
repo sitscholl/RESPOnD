@@ -11,6 +11,7 @@ import time
 import logging
 
 logger = logging.getLogger(__name__)
+logging.getLogger('urllib3').setLevel(logging.WARNING)
 
 ####Tests
 ####
@@ -56,17 +57,20 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
         )
 
     ##Load data
-    logger.debug('Downloading files')
     dwnloads = _multithreaded_download(urls, n_threads, download_dir = download_dir)
     
-    logger.debug('Loading data into Dataset')
-    logger.debug(f"Downloaded files: {';'.join([str(i) for i in dwnloads])}")
-    #ds = xr.open_mfdataset(urls, chunks='auto', join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
-    ds = xr.combine_by_coords([xr.open_dataset(i).sel(lat=slice(miny, maxy), lon=slice(minx, maxx)) for i in dwnloads], join = 'override', combine_attrs='override')
+    logger.info('Loading data into dataset')
+    # ds = xr.open_mfdataset(urls, chunks='auto', join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
+    # ds = xr.combine_by_coords([xr.open_dataset(i).sel(lat=slice(miny, maxy), lon=slice(minx, maxx)) for i in dwnloads], join = 'override', combine_attrs='override')
+    ds = []
+    for i in dwnloads:
+        logger.debug(f'Loading {i.name}')
+        ds.append(xr.open_dataset(i).sel(lat=slice(miny, maxy), lon=slice(minx, maxx)))
+    ds = xr.combine_by_coords(ds, join = 'override', combine_attrs='override')
 
     for var in ds.keys():
-        logger.debug('Transforming data units')
         if 'tas' in var:
+            logger.debug(f'Transforming data units for var {var}')
             ds[var] = ds[var] - 273.5
     ds = ds.rio.write_crs(4326)
     
@@ -86,7 +90,7 @@ def _download_files(url, download_dir, attempts = 3, overwrite = False):
     if local_filename.is_file() and (not overwrite):
         return(local_filename, None)
 
-    logger.debug(f"Downloading {url} to {local_filename}")
+    # logger.debug(f"Downloading {url} to {local_filename}")
 
     for attempt in range(attempts):  # Retry up to n times
 

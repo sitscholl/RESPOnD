@@ -4,6 +4,9 @@ import xarray as xr
 import matplotlib.pyplot as plt
 import datetime
 
+logger = logging.getLogger(__name__)
+logging.getLogger('rasterio').setLevel(logging.WARNING)
+
 #####Testing
 # from itertools import product
 
@@ -29,7 +32,6 @@ import datetime
 #####
 
 def calc_phen_date(tas, Fcrit):
-    logger = logging.getLogger('main')
 
     ##Check if necessary dims are present
     if not 'time' in tas.dims:
@@ -66,7 +68,6 @@ def calc_phen_date(tas, Fcrit):
     return(phen_date)
 
 def get_climatic_window(ds, phen_date, window):
-    logger = logging.getLogger('main')
 
     ##Check if necessary dims are present
     if not 'time' in ds.dims:

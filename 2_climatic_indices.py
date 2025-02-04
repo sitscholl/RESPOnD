@@ -98,7 +98,7 @@ for y_group in chunker(years, y_chunks):
         y_group = [i for i in y_group if i not in years_processed]
 
         if len(years_processed) > 0:
-            logger.info(f"Skipping already processed years: {', '.join(years_processed)}")
+            logger.info(f"Skipping already processed years: {', '.join([str(i) for i in years_processed])}")
         if len(y_group) == 0:
             continue
 
