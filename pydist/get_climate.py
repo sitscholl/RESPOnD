@@ -58,6 +58,7 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
 
     ##Load data
     dwnloads = _multithreaded_download(urls, n_threads, download_dir = download_dir)
+    dwnloads.sort()
     
     logger.info('Loading data into dataset')
     # ds = xr.open_mfdataset(urls, chunks='auto', join = 'override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
