@@ -9,9 +9,25 @@ from multiprocessing.pool import ThreadPool
 from functools import partial
 import time
 import logging
+import platform
+import os
+import datetime
+from dotenv import load_dotenv
+
+# Activate this on windows before importing pyesgf, otherwise import of logon manager throws error
+if platform.uname().system == 'Windows':
+    os.environ['HOME'] = os.environ['USERPROFILE'] 
+
+from pyesgf.search import SearchConnection
+from pyesgf.logon import LogonManager
+# import xesmf as xe
+
+os.environ["ESGF_PYCLIENT_NO_FACETS_STAR_WARNING"] = "on"
 
 logger = logging.getLogger(__name__)
 logging.getLogger('urllib3').setLevel(logging.WARNING)
+
+load_dotenv('../.config/credentials.env')
 
 ####Tests
 ####
@@ -77,8 +93,108 @@ def load_chelsa_w5e5(variables, resolution, years, months = np.arange(1, 13), ao
     
     return(ds)
 
-def load_cordex():
-    pass
+def load_cordex(
+    user, pwd, 
+    variables = ['tasAdjust', 'prAdjust', 'tasminAdjust', 'tasmaxAdjust'], 
+    project = 'CORDEX-Adjust', 
+    year_start = 1980, 
+    year_end = 2100, 
+    time_frequency = 'day',
+    experiment = 'rcp45', 
+    bias_adjustment = 'v1-LSCE-IPSL-CDFt-EOBS10-1971-2005'
+):
+
+    fnams, urls = query_cordex(user, pwd, variables, project, year_start, year_end, time_frequency, experiment, bias_adjustment)
+
+    ds = xr.open_mfdataset(urls)[variables]#.sel(rlat = slice(-5, 0), rlon = slice(-10, -5))
+
+    if len(set([i.shape for i in ds])) > 1:
+        raise ValueError(f'Shape mismatch between variables!')
+    ds = xr.merge(ds)
+
+    return(ds)
+
+
+def query_cordex(
+    user, pwd, 
+    variables = ['tasAdjust', 'prAdjust', 'tasminAdjust', 'tasmaxAdjust'], 
+    project = 'CORDEX-Adjust', 
+    year_start = 1980, 
+    year_end = 2100, 
+    time_frequency = 'day',
+    experiment = 'rcp45', 
+    bias_adjustment = 'v1-LSCE-IPSL-CDFt-EOBS10-1971-2005'
+):
+
+    # Log into ESGF Portal
+    openid = f"https://esgf.nci.org.au/esgf-idp/openid/{user}"
+
+    lm = LogonManager()
+
+    if not lm.is_logged_on():
+        lm.logon_with_openid(openid=openid, bootstrap=True, password=pwd)
+
+    if not lm.is_logged_on():
+        raise ValueError('Log on failed!')
+
+    logger.debug('Logged into ESGF portal')
+
+    # Execute Query
+    search_args = {
+        'project': project,
+        'domain': 'EUR-11',
+        'time_frequency': time_frequency,
+        'from_timestamp': f"{year_start}-01-01T00:00:00Z",
+        'to_timestamp': f"{year_end}-12-31T23:59:00Z",
+        'ensemble': 'r1i1p1',
+        'experiment': experiment,
+        "bias_adjustment": bias_adjustment,
+        'facets': 'driving_model,rcm_name,variable',
+        'latest': True,
+    }
+
+    conn = SearchConnection('https://esgf-data.dkrz.de/esg-search', distrib=True)
+    ctx = conn.new_context(**search_args)
+    gcms = list(ctx.facet_counts['driving_model'].keys())
+    logger.debug(f'Query executed. Found {len(gcms)} gcms.')
+
+    fnams_all = []
+    urls_all = []
+    for gcm in gcms:
+        ctx_gcm = ctx.constrain(driving_model = gcm)
+        rcms = list(ctx_gcm.facet_counts['rcm_name'].keys())
+
+        for rcm in rcms:
+            ctx_rcm = ctx_gcm.constrain(rcm_name = rcm)
+            vars_list = list(ctx_rcm.facet_counts['variable'].keys())
+
+            if not all([i in vars_list for i in variables]):
+                logger.warning(f"Not all variables present for {gcm}-{rcm}")
+                continue
+
+            for var in variables:
+                ctx_var = ctx_rcm.constrain(variable = var)
+                dataset = ctx_var.search()
+
+                if len(dataset) != 1:
+                    logger.warning(f'More than 1 files found for {gcm}-{rcm}-{var}! Found {len(dataset)} files.')
+                    continue
+
+                files = dataset[0].file_context().search()
+                fnames = [i.filename for i in files]
+                urls = [i.opendap_url for i in files]
+
+                sdates = [datetime.datetime.strptime(i.split('_')[-1].split('-')[0], '%Y%m%d') for i in fnames]
+                fnames_sel = [fnam for i,fnam in enumerate(fnames) if sdates[i] >= datetime.datetime(year_start, 1, 1)]
+                urls_sel = [url for i,url in enumerate(urls) if sdates[i] >= datetime.datetime(year_start, 1, 1)]
+
+                fnams_all.extend(fnames_sel)
+                urls_all.extend(urls_sel)
+
+                logger.debug(f"Found {len(urls_all)} files for {gcm}-{rcm}-{var}")
+
+    return(fnams_all, urls_all)
+
 
 ##https://stackoverflow.com/questions/16694907/download-large-file-in-python-with-requests
 def _download_files(url, download_dir, attempts = 3, overwrite = False):
