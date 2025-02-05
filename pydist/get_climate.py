@@ -120,7 +120,7 @@ def open_climate_dataset(
     chunks={"time": 52},
     aoi=(-180, -90, 180, 90),
     init_slurm=False,
-    cluster_kwargs=dict(queue='normal', cores=8, memory='16GB', walltime="01:00:00"),
+    cluster_kwargs=None,
 ):
     """
     Open a list of NetCDF files into a single xarray Dataset.
