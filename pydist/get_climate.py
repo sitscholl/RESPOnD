@@ -121,9 +121,7 @@ def open_climate_dataset(
     aoi=(-180, -90, 180, 90),
     init_slurm=False,
     cluster_kwargs=dict(),
-    n_jobs = 1,
-    min_workers = 1,
-    max_workers = 30
+    n_jobs = 1
 ):
     """
     Open a list of NetCDF files into a single xarray Dataset.
@@ -165,7 +163,7 @@ def open_climate_dataset(
 
             cluster = SLURMCluster(**cluster_kwargs)
             cluster.scale(jobs=n_jobs)
-            cluster.adapt(minimum=min_workers, maximum=max_workers)
+            # cluster.adapt(minimum=min_workers, maximum=max_workers)
         else:
             from dask.distributed import LocalCluster
 
