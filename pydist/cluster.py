@@ -18,5 +18,6 @@ def init_cluster(init_slurm = False, cluster_kwargs = dict(), n_jobs = 1):
 
     client = Client(cluster)
     logger.info("Initialized Dask client on: %s", client)
+    logger.info(f"Dashboard available at: {client.dashboard_link}")
 
     return(client)
