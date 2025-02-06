@@ -113,15 +113,11 @@ def _multithreaded_download(urls, n_threads, download_dir):
     logger.info(f"Downloads finished. Elapsed Time: {time.time() - start:.2f}s" )
     return(local_files)
 
-
 def open_climate_dataset(
     file_list,
     use_dask=False,
     chunks={"time": -1, "lat": 'auto', 'lon': 'auto'},
-    aoi=(-180, -90, 180, 90),
-    init_slurm=False,
-    cluster_kwargs=dict(),
-    n_jobs = 1
+    aoi=(-180, -90, 180, 90)
 ):
     """
     Open a list of NetCDF files into a single xarray Dataset.
@@ -131,7 +127,7 @@ def open_climate_dataset(
           List of file paths
       use_dask : bool, default False
           If False, load each file fully into memory and combine using xr.combine_by_coords.
-          If True, load the dataset lazily with dask by passing the chunks argument.
+          If True, load the dataset lazily with dask
       chunks : dict, default {'time': 52}
           Chunking dictionary for dask.
       aoi : tuple
@@ -149,32 +145,15 @@ def open_climate_dataset(
     """
 
     logger.info('Loading data into dataset')
+
     if (not isinstance(aoi, tuple)):
         raise ValueError(f"aoi must be provided as tuple. Got {type(aoi)}")
     minx, miny, maxx, maxy = aoi
 
     # Initialize dask cluster
     if use_dask:
-        import dask
-        from dask.distributed import Client
-
-        if init_slurm:
-            from dask_jobqueue import SLURMCluster
-
-            cluster = SLURMCluster(**cluster_kwargs)
-            cluster.scale(jobs=n_jobs)
-            # cluster.adapt(minimum=min_workers, maximum=max_workers)
-        else:
-            from dask.distributed import LocalCluster
-
-            cluster = LocalCluster()
-
-        client = Client(cluster)
-        logger.info("Initialized Dask client on: %s", client)
-
         # Lazy loading with dask: use open_mfdataset with provided chunks.
         ds = xr.open_mfdataset(file_list, chunks=chunks, combine='by_coords', join='override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))
-
     else:
         # Eagerly load all files: open each file fully into memory then combine.
         ds_list = []
@@ -198,6 +177,7 @@ if __name__ == "__main__":
 
     import argparse
     from config import aois
+    from cluster import init_cluster
 
     parser = argparse.ArgumentParser()
     parser.add_argument('-v', '--variables', default = ['tas'], nargs='+', help = 'Variables to download. Choose one or more of tas, tasmax, tasmin and pr')
@@ -215,6 +195,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     minx, miny, maxx, maxy = aois[args.aoi]
+    if args.use_dask:
+        client = init_cluster(init_slurm=args.init_slurm, n_jobs = args.n_jobs)
+
     ds = load_chelsa_w5e5(
         args.variables,
         resolution=f"{args.resolution}arcsec",
@@ -223,9 +206,7 @@ if __name__ == "__main__":
         aoi=(minx, miny, maxx, maxy),
         n_threads=args.threads,
         download_dir=args.ddir,
-        use_dask = args.use_dask,
-        init_slurm = args.init_slurm,
-        n_jobs = args.n_jobs
+        use_dask=args.use_dask
     )
 
     logger.info(f'Downloaded dataset has the following shape: {list(ds.sizes.items())} and keys: {list(ds.keys())}')
@@ -234,5 +215,7 @@ if __name__ == "__main__":
         chunk_inf = dict(ds.chunks)# {i: max(j) for i,j in ds.chunks.items()}
         logger.info(f'Computing array with max chunkshapes per dim of: {chunk_inf}')
         ds_mean = ds.mean().compute()
+    else:
+        ds_mean = ds.mean()
 
     logger.info(f"Average values are: {' -- '.join([f"{i}: {ds_mean[i].item():.2f}" for i in ds])}")
