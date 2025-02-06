@@ -117,7 +117,7 @@ def _multithreaded_download(urls, n_threads, download_dir):
 def open_climate_dataset(
     file_list,
     use_dask=False,
-    chunks={"time": 52},
+    chunks={"time": -1, "lat": 'auto', 'lon': 'auto'},
     aoi=(-180, -90, 180, 90),
     init_slurm=False,
     cluster_kwargs=dict(),
@@ -227,7 +227,8 @@ if __name__ == "__main__":
     logger.info(f'Downloaded dataset has the following shape: {list(ds.sizes.items())} and keys: {list(ds.keys())}')
 
     if len(ds.chunks) > 0:
-        logger.info('Computing array')
-        ds = ds.compute()
+        chunk_inf = dict(ds.chunks)# {i: max(j) for i,j in ds.chunks.items()}
+        logger.info(f'Computing array with max chunkshapes per dim of: {chunk_inf}')
+        ds_mean = ds.mean().compute()
 
-    logger.info(f"Average values are: {' -- '.join([f"{i}: {ds[i].mean().item():.2f}" for i in ds])}")
+    logger.info(f"Average values are: {' -- '.join([f"{i}: {ds_mean[i].item():.2f}" for i in ds])}")
