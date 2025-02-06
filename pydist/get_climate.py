@@ -121,6 +121,9 @@ def open_climate_dataset(
     aoi=(-180, -90, 180, 90),
     init_slurm=False,
     cluster_kwargs=dict(),
+    n_jobs = 1,
+    min_workers = 1,
+    max_workers = 30
 ):
     """
     Open a list of NetCDF files into a single xarray Dataset.
@@ -161,7 +164,8 @@ def open_climate_dataset(
             from dask_jobqueue import SLURMCluster
 
             cluster = SLURMCluster(**cluster_kwargs)
-            cluster.scale(jobs=2) ##TODO: Change this
+            cluster.scale(jobs=n_jobs)
+            cluster.adapt(minimum=min_workers, maximum=max_workers)
         else:
             from dask.distributed import LocalCluster
 
@@ -208,6 +212,7 @@ if __name__ == "__main__":
     parser.add_argument('-da', '--use_dask', action = 'store_true', help = 'Use dask for opening .nc files')
     parser.add_argument('-ic', '--init_slurm', action = 'store_true', help = 'Initialize a SLURM-based dask cluster')
     parser.add_argument('-a', '--aoi', default = 'europe', help = 'Name of area of interest for analysis.')
+    parser.add_argument('-j', '--n_jobs', default = 1, type = int, help = 'Number of jobs to launch by dask scheduler')
 
     args = parser.parse_args()
 
@@ -221,7 +226,8 @@ if __name__ == "__main__":
         n_threads=args.threads,
         download_dir=args.ddir,
         use_dask = args.use_dask,
-        init_slurm = args.init_slurm
+        init_slurm = args.init_slurm,
+        n_jobs = args.n_jobs
     )
 
     logger.info(f'Downloaded dataset has the following shape: {list(ds.sizes.items())} and keys: {list(ds.keys())}')
