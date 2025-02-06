@@ -38,8 +38,8 @@ def calc_phen_date(tas, Fcrit):
         raise ValueError('Time dimension not found in dataset.')
 
     ##Check if unit is °C
-    if (tas.max() > 100).any().item():
-        raise ValueError('Temperature values above 100 detected. Make sure units are in °C')
+    # if (tas.max().compute() > 100).any().item():
+    #     raise ValueError('Temperature values above 100 detected. Make sure units are in °C')
 
     ##Calculate temperature cumsum for each year after 60th doy
     logger.debug('Calculating temperature cumulative sum')
@@ -91,8 +91,8 @@ def get_climatic_window(ds, phen_date, window):
     # Fcrit_range = Fcrit_range.where(Fcrit_range.dt.month > 3)
 
     ##Check if required dates are present
-    if ds.time.min().item() > veraison_range.min(skipna = True).item():
-        raise ValueError(f'Timerange in ds too small! Make sure to include additional months at start of year to cover entire veraison_range. ds starts at {ds.time.min().values} and veraison_range starts at {veraison_range.min(skipna = True).values}')
+    # if ds.time.min().item() > veraison_range.min(skipna = True).item():
+    #     raise ValueError(f'Timerange in ds too small! Make sure to include additional months at start of year to cover entire veraison_range. ds starts at {ds.time.min().values} and veraison_range starts at {veraison_range.min(skipna = True).values}')
 
     ##Get climatic variables within 45 day window for valid pixels
     logger.debug('Extracting climatic data after veraison date')
