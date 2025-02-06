@@ -150,7 +150,6 @@ def open_climate_dataset(
         raise ValueError(f"aoi must be provided as tuple. Got {type(aoi)}")
     minx, miny, maxx, maxy = aoi
 
-    # Initialize dask cluster
     if use_dask:
         # Lazy loading with dask: use open_mfdataset with provided chunks.
         ds = xr.open_mfdataset(file_list, chunks=chunks, combine='by_coords', join='override', combine_attrs='override').sel(lat=slice(miny, maxy), lon=slice(minx, maxx))

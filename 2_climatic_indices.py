@@ -4,6 +4,7 @@ import numpy as np
 import xarray as xr
 from pathlib import Path
 import argparse
+from tempfile import TemporaryDirectory
 import pydist
 import logging
 import logging.config
@@ -24,6 +25,10 @@ parser.add_argument('-ys', '--year_start', default = 2000, type = int, help = 'S
 parser.add_argument('-ye', '--year_end', default = 2001, type = int, help = 'Last year of climate grids. Must be greater than year_start.')
 parser.add_argument('-yc', '--year_chunks', default = 1, type = int, help = 'Number of years that should be processed at once. Depends on RAM of host. Default is to process each year individually.')
 parser.add_argument('-tr', '--threads', default = 1, type = int, help = 'Number of threads to use for downloading files')
+parser.add_argument('-d', '--ddir', default = TemporaryDirectory(), help = 'Directory to store downloaded files')
+parser.add_argument('-da', '--use_dask', action = 'store_true', help = 'Use dask for opening .nc files')
+parser.add_argument('-ic', '--init_slurm', action = 'store_true', help = 'Initialize a SLURM-based dask cluster')
+parser.add_argument('-j', '--n_jobs', default = 1, type = int, help = 'Number of jobs to launch by dask scheduler')
 
 args = parser.parse_args()
 
@@ -84,6 +89,10 @@ vn_weights = xr.open_dataset('data/vineyards/rasterized_area_share.tif').band_da
 # weightmap = vn_weights.groupby(vn_arr) / vn_weights.groupby(vn_arr).sum(skipna = True, min_count = 1)
 # weightmap = weightmap.drop_vars('id')
 
+##Start Dask Cluster
+if args.use_dask:
+    client = pydist.init_cluster(init_slurm=args.init_slurm, n_jobs = args.n_jobs)
+
 clim_idx = []
 vn_arr_re = vn_arr.copy()
 vn_weights_re = vn_weights.copy()
@@ -104,7 +113,16 @@ for y_group in chunker(years, y_chunks):
 
     ##Load chelsa data
     logger.info('Loading climate data')
-    ds = pydist.load_chelsa_w5e5(variables, resolution, y_group, months = months, aoi = (minx, miny, maxx, maxy), n_threads = args.threads)
+    ds = pydist.load_chelsa_w5e5(
+        variables,
+        resolution,
+        y_group,
+        months=months,
+        aoi=(minx, miny, maxx, maxy),
+        n_threads=args.threads,
+        download_dir=args.ddir,
+        use_dask = args.use_dask
+    )
 
     ##Align weight and climate arrays
     vn_arr_re, vn_weights_re = pydist.align_arrays(vn_arr, vn_weights, base = ds.isel(time = 0).tas)
@@ -162,4 +180,3 @@ for y_group in chunker(years, y_chunks):
 
         file_exists = out_csv.exists()
         _clim_pdo.to_csv(out_csv, header=not file_exists, mode='a' if file_exists else 'w')
-
